@@ -1,20 +1,26 @@
-"""Rebuild the static Japanese MP3 clips from the course, using Node and Python.
+"""Build Japanese teaching clips locally.
 
-Python packages: pyopenjtalk-plus==0.4.1.post10, numpy and lameenc.
-Run from any directory: python scripts/generate_audio.py
+Requires voicevox_core 0.17.1, its CPU ONNX runtime, VOICEVOX Nemo n0.vvm,
+an Open JTalk UTF-8 dictionary, numpy, soundfile and lameenc. Pass local paths
+with --runtime, --model, --dictionary and --recordings. The filenames for
+the recordings are listed in kana-recordings.json and word-recordings.json.
+Extract the two upstream repositories under the recordings directory as
+explained in assets/audio/CREDITS.md.
 """
-
+import argparse
 import hashlib
+import io
 import json
 import re
 import subprocess
 import unicodedata
+import wave
 from pathlib import Path
 
 import lameenc
 import numpy as np
-import pyopenjtalk
-
+import soundfile as sf
+from voicevox_core.blocking import Onnxruntime, OpenJtalk, Synthesizer, VoiceModelFile
 
 ROOT = Path(__file__).resolve().parents[1]
 DEST = ROOT / "assets/audio"
@@ -59,67 +65,125 @@ def lexical_input(text):
 
 
 def collect():
-    command = [
-        "node", "--no-warnings", "--experimental-default-type=module",
-        "--input-type=module", "-e",
-        "import {lessons} from './lessons.js'; console.log(JSON.stringify(lessons))",
-    ]
-    lessons = json.loads(subprocess.check_output(command, cwd=ROOT))
+    js = """import {lessons} from './lessons.js';
+    import {kanaGuides} from './kana-guides.js';
+    console.log(JSON.stringify({lessons, words:kanaGuides.flatMap(g=>g.words)}))"""
+    command = ["node", "--no-warnings", "--experimental-default-type=module",
+               "--input-type=module", "-e", js]
+    course = json.loads(subprocess.check_output(command, cwd=ROOT))
     phrases = kana_clips()
-    phrases.update({phrase: phrase for phrase in HOME_PHRASES})
-    for lesson in lessons:
-        examples = [ex for step in lesson["steps"] for ex in step["examples"]]
-        for ex in [*examples, *lesson["dialogue"]]:
+    phrases.update({s: s for s in HOME_PHRASES})
+    replies = {}
+    for lesson in course["lessons"]:
+        for ex in [ex for part in lesson["steps"] for ex in part["examples"]] + lesson["dialogue"]:
             text = ex["jp"]
             phrases.setdefault(key(text), lexical_input(text))
+            if ex.get("who", "").startswith("你"):
+                replies[key(text)] = lexical_input(text)
         for quiz in lesson["quiz"]:
-            if quiz.get("listen"):
+            if "listen" in quiz:
                 text = quiz["listen"]
                 phrases.setdefault(key(text), lexical_input(text))
-    return phrases
+    for ex in course["words"]:
+        phrases.setdefault(key(ex["jp"]), lexical_input(ex["jp"]))
+    return phrases, replies
 
 
-def write_mp3(spoken, path):
-    waveform, rate = pyopenjtalk.tts(spoken, speed=0.96, predict_nani=False)
-    peak = np.abs(waveform).max()
-    if peak < 32:
-        raise ValueError(f"No audible speech in {spoken!r}")
-    voiced = np.flatnonzero(np.abs(waveform) > max(24, peak * 0.002))
-    start = max(0, voiced[0] - int(rate * 0.055))
-    end = min(len(waveform), voiced[-1] + int(rate * 0.095))
-    pcm = np.rint(waveform[start:end] * (26500 / peak)).astype("<i2")
+def encode(samples, rate, target):
+    peak = np.abs(samples).max()
+    if peak < 0.0005:
+        raise ValueError(f"Silent clip: {target.name}")
+    # Retain relative dynamics and leave headroom for MP3 decoding.
+    rms = np.sqrt(np.mean(samples[samples**2 > (peak * 0.03)**2]**2))
+    gain = min(0.81 / peak, 0.15 / max(rms, 0.001))
+    pcm = np.rint(samples * gain * 32767).astype("<i2")
     encoder = lameenc.Encoder()
     encoder.set_channels(1)
     encoder.set_in_sample_rate(rate)
-    encoder.set_bit_rate(80)
+    encoder.set_bit_rate(96)
     encoder.set_quality(2)
-    path.write_bytes(encoder.encode(pcm.tobytes()) + encoder.flush())
+    target.write_bytes(encoder.encode(pcm.tobytes()) + encoder.flush())
 
 
-def build(phrases):
-    DEST.mkdir(parents=True, exist_ok=True)
-    manifest = DEST / "catalog.js"
-    previous = set()
-    if manifest.exists():
-        old = manifest.read_text(encoding="utf-8").removeprefix("export const clips = ").rstrip(";\n")
-        previous = set(json.loads(old).values())
-    catalog = {}
+def human_take(path):
+    samples, rate = sf.read(path)
+    if samples.ndim == 2:
+        samples = samples.mean(axis=1)
+    # Preserve the full utterance, including weak fricatives and natural
+    # pauses. Only remove silence beyond both margins at the outer edges.
+    block = rate // 100
+    frames = samples[:len(samples)//block*block].reshape(-1, block)
+    rms = np.sqrt((frames**2).mean(axis=1))
+    active = np.flatnonzero(rms > max(0.001, rms.max()*0.018))
+    if not active.size:
+        raise ValueError(f"Silent recording: {path}")
+    lo = max(0, (active[0]-10)*block)
+    hi = min(len(samples), (active[-1]+15)*block)
+    return samples[lo:hi], rate
+
+
+def neural_take(synth, spoken, style, isolated):
+    # These written forms are unambiguous in their teaching context.
+    spoken = {"ひょう":"雹"}.get(spoken,spoken)
+    query = synth.create_audio_query(spoken, style)
+    query.speed_scale = 0.96
+    query.pre_phoneme_length = 0.07
+    query.post_phoneme_length = 0.12
+    if isolated:
+        for phrase in query.accent_phrases:
+            for mora in phrase.moras:
+                mora.vowel_length = max(mora.vowel_length, 0.19)
+    audio = synth.synthesis(query, style, enable_interrogative_upspeak=True)
+    with wave.open(io.BytesIO(audio)) as w:
+        return np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(float)/32768, w.getframerate()
+
+
+def build(args):
+    synth = Synthesizer(Onnxruntime.load_once(filename=str(args.runtime)),
+                        OpenJtalk(str(args.dictionary)), cpu_num_threads=3)
+    with VoiceModelFile.open(str(args.model)) as model:
+        synth.load_voice_model(model)
+    source = json.loads((ROOT/"scripts/kana-recordings.json").read_text())
+    kana_sources = {katakana(h):args.recordings/relative for h,relative in source.items()}
+    word_files = json.loads((ROOT/"scripts/word-recordings.json").read_text())
+    word_sources = {word:args.recordings/relative for word,relative in word_files.items()}
+    for path in [*kana_sources.values(), *word_sources.values()]:
+        if not path.is_file():
+            raise FileNotFoundError(f"Missing attributed recording: {path}")
+    phrases, replies = collect()
+    symbols = set(kana_clips().values())
+    parts = []
     generated = set()
-    for text, spoken in sorted(phrases.items()):
-        stem = hashlib.sha256(spoken.encode()).hexdigest()[:16]
-        if stem not in generated:
-            write_mp3(spoken, DEST / f"{stem}.mp3")
-            generated.add(stem)
-        catalog[text] = stem
-    entries = json.dumps(catalog, ensure_ascii=False, indent=2)
-    pending = manifest.with_suffix(".tmp")
-    pending.write_text(f"export const clips = {entries};\n", encoding="utf-8")
-    pending.replace(manifest)
-    for unused in previous - generated:
-        if re.fullmatch("[0-9a-f]{16}", unused):
-            (DEST / f"{unused}.mp3").unlink(missing_ok=True)
-    print(f"{len(catalog)} written forms, {len(generated)} sound clips")
+    used_human = set()
+    for name, inputs, style in [("clips",phrases,10005),("replyClips",replies,10001)]:
+        catalog = {}
+        for text, spoken in sorted(inputs.items()):
+            # Keep existing default filenames usable by tabs opened before an update.
+            identity = spoken if name=="clips" else f"{style}:{spoken}"
+            stem = hashlib.sha256(identity.encode()).hexdigest()[:16]
+            path = DEST/f"{stem}.mp3"
+            native_file = None
+            if name == "clips":
+                native_file = kana_sources.get(spoken) or word_sources.get(spoken.rstrip("。"))
+
+            if stem not in generated:
+                samples,rate = human_take(native_file) if native_file else neural_take(synth,spoken,style,spoken in symbols)
+                encode(samples,rate,path)
+                generated.add(stem)
+            if name=="clips" and spoken in kana_sources:
+                used_human.add(spoken)
+            catalog[text] = stem
+        parts.append("export const "+name+" = "+json.dumps(catalog,ensure_ascii=False,indent=2)+";")
+    parts.append("export const humanKana = "+json.dumps(sorted(used_human),ensure_ascii=False)+";")
+    parts.append("export const humanWords = "+json.dumps(sorted(word_sources),ensure_ascii=False)+";")
+    pending = DEST/"catalog.tmp"
+    pending.write_text("\n".join(parts)+"\n")
+    pending.replace(DEST/"catalog.js")
+    print(f"{len(generated)} MP3s, {len(used_human)} human kana, {len(replies)} learner replies")
 
 
 if __name__ == "__main__":
-    build(collect())
+    parser=argparse.ArgumentParser(description=__doc__)
+    for flag in ["runtime","dictionary","model","recordings"]:
+        parser.add_argument("--"+flag,type=Path,required=True)
+    build(parser.parse_args())

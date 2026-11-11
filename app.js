@@ -1,7 +1,16 @@
 import { lessons, references } from "./lessons.js";
 import { kanaRows, kanaNotes, extraKana } from "./kana.js";
-import { strokes } from "./strokes.js";
-import { speak, stopAudio } from "./audio.js";
+import { strokes } from "./strokes.js?v=3";
+import { kanaGuides, guideById } from "./kana-guides.js";
+import {
+  strokeBoard,
+  guideURL,
+  guideView,
+  handleGuide,
+  changeGuideRow,
+  stopGuidePlayback,
+} from "./guide-view.js";
+import { speak, stopAudio } from "./audio.js?v=3";
 
 const tracks = [
   {
@@ -71,6 +80,8 @@ for (const lesson of lessons) {
 const storageKey = "nihongo-biyori-learning-v1";
 const defaults = {
   done: [],
+  kanaDone: [],
+  kanaBookmark: "",
   saved: [],
   mistakes: [],
   positions: {},
@@ -82,13 +93,21 @@ const defaults = {
 let state = structuredClone(defaults);
 try {
   const data = JSON.parse(localStorage.getItem(storageKey) || "{}");
-  for (const key of ["done", "saved", "mistakes"])
+  for (const key of ["done", "saved", "mistakes", "kanaDone"])
     if (Array.isArray(data?.[key]))
       state[key] = [...new Set(data[key].filter((x) => typeof x === "string"))];
   if (data?.positions && typeof data.positions === "object")
     state.positions = data.positions;
   for (const key of ["slow", "readings", "meanings"])
     if (typeof data?.[key] === "boolean") state[key] = data[key];
+  if (
+    typeof data?.kanaBookmark === "string" &&
+    /^#kana\/[a-z]+(?:\/(listen|words|check)(?:\/kata)?)?$/.test(
+      data.kanaBookmark,
+    ) &&
+    guideById.has(data.kanaBookmark.split("/")[1])
+  )
+    state.kanaBookmark = data.kanaBookmark;
   if (lessonById.has(data?.last)) state.last = data.last;
 } catch {
   /* First visit or storage unavailable. */
@@ -136,18 +155,21 @@ let audioEpoch = 0,
 function silence() {
   audioEpoch++;
   sequence = false;
+  stopGuidePlayback();
   stopAudio();
   audioButton?.classList.remove("speaking");
   audioButton = null;
   const btn = main.querySelector('[data-action="sequence"]');
   if (btn) btn.innerHTML = ic("play") + " 连续播放";
 }
-function soundButton(text, label = "播放日语", reading = "") {
+function soundButton(text, label = "播放日语", reading = "", learner = false) {
   return (
     '<button type="button" class="sound" data-action="sound" data-text="' +
     esc(text) +
     '" data-reading="' +
     esc(reading) +
+    '" data-voice="' +
+    (learner ? "learner" : "narrator") +
     '" aria-label="' +
     esc(label) +
     '" title="' +
@@ -165,7 +187,12 @@ async function playOne(button) {
   audioButton = button;
   button.classList.add("speaking");
   try {
-    await speak(button.dataset.text, state.slow, button.dataset.reading);
+    await speak(
+      button.dataset.text,
+      state.slow,
+      button.dataset.reading,
+      button.dataset.voice === "learner",
+    );
   } catch (error) {
     if (epoch === audioEpoch) notify(error.message);
   } finally {
@@ -182,12 +209,22 @@ async function playSequence(button) {
   const epoch = audioEpoch;
   sequence = true;
   button.textContent = "停止播放";
-  for (const row of main.querySelectorAll(".line-row .sound")) {
+  const rows = [...main.querySelectorAll(".line-row .sound")];
+  for (const [i, row] of rows.entries()) {
     if (epoch !== audioEpoch) break;
     row.classList.add("speaking");
     audioButton = row;
     try {
-      await speak(row.dataset.text, state.slow, row.dataset.reading);
+      await speak(
+        row.dataset.text,
+        state.slow,
+        row.dataset.reading,
+        row.dataset.voice === "learner",
+      );
+      if (epoch === audioEpoch && i + 1 < rows.length)
+        await new Promise((resolve) =>
+          setTimeout(resolve, state.slow ? 800 : 480),
+        );
     } catch (error) {
       if (epoch === audioEpoch) notify(error.message);
       break;
@@ -368,7 +405,12 @@ function row(item, key, dialogue = false) {
     read +
     (state.meanings ? '<p class="translation">' + esc(item.zh) + "</p>" : "") +
     '</div><div class="mini-actions">' +
-    soundButton(item.jp, "播放「" + item.jp + "」", item.kana) +
+    soundButton(
+      item.jp,
+      "播放「" + item.jp + "」",
+      item.kana,
+      dialogue && item.who.startsWith("你"),
+    ) +
     starButton(key) +
     "</div></div>"
   );
@@ -394,30 +436,6 @@ function controls() {
       )
       .join("") +
     "</div>"
-  );
-}
-function strokeBoard(char, animate = true) {
-  const paths = strokes[char];
-  return (
-    '<svg class="stroke-board" viewBox="0 0 109 109" role="img" aria-label="' +
-    char +
-    "，共 " +
-    paths.length +
-    ' 笔">' +
-    paths.map((d) => '<path class="stroke-guide" d="' + d + '"/>').join("") +
-    paths
-      .map(
-        (d, i) =>
-          '<path class="stroke-ink' +
-          (animate ? " drawing" : "") +
-          '" d="' +
-          d +
-          '" pathLength="1" style="--wait:' +
-          i * 0.64 +
-          's"/>',
-      )
-      .join("") +
-    "</svg>"
   );
 }
 function vowelDemo() {
@@ -552,6 +570,40 @@ function quizStage(l) {
     "</div>"
   );
 }
+const lessonRows = {
+  f01: [["a"], ["a"], ["a"], ["a"], ["a"]],
+  f02: [["ka"], ["sa"], ["ka", "sa"]],
+  f03: [["ta"], ["na"], ["ta", "na"]],
+  f04: [["ha"], ["ma"], ["ha", "ma"]],
+  f05: [["ya"], ["ra"], ["wa", "n"]],
+  f06: [["ga"], ["za", "da", "ba"], ["pa"]],
+  f07: [["kya", "sha", "cha"], ["ta"], ["kya"]],
+  f08: [
+    ["a", "ka"],
+    ["ra", "kya"],
+    ["sa", "ta", "n"],
+  ],
+};
+function lessonGuideLinks(id, n) {
+  const guides = lessonRows[id]?.[n];
+  if (!guides) return "";
+  return (
+    '<section class="lesson-row-links"><h3>逐行跟练</h3><div class="toolbar">' +
+    guides
+      .map(
+        (g) =>
+          '<a class="tool" href="' +
+          guideURL(g, "listen", id === "f08" ? "kata" : "hira") +
+          '">' +
+          guideById.get(g).title +
+          " · 听音跟读 " +
+          ic("arrow") +
+          "</a>",
+      )
+      .join("") +
+    "</div></section>"
+  );
+}
 function readerStage(l) {
   const n = stageIndex;
   if (n === l.steps.length + 1) return quizStage(l);
@@ -615,6 +667,7 @@ function readerStage(l) {
   }
   return (
     content +
+    lessonGuideLinks(l.id, n) +
     '<div class="stage-footer">' +
     (n > 0
       ? '<a class="text-link" href="' + lessonURL(l.id, n - 1) + '">上一步</a>'
@@ -690,6 +743,20 @@ function kanaDetail() {
     "</p>"
   );
 }
+function rowLink(guide) {
+  const done = state.kanaDone.includes(guide.id);
+  return (
+    '<a class="row-name guide-link" href="' +
+    guideURL(guide.id, "listen", session.kanaType) +
+    '" aria-label="逐行跟练：' +
+    guide.title +
+    '">' +
+    guide.title +
+    " " +
+    (done ? "✓" : "›") +
+    "</a>"
+  );
+}
 function extraSounds() {
   const groups = [
     [
@@ -716,10 +783,9 @@ function extraSounds() {
         extraKana
           .slice(start, end)
           .map(
-            (r) =>
-              '<div class="extra-row"><span class="row-name">' +
-              r.name +
-              "</span>" +
+            (r, i) =>
+              '<div class="extra-row">' +
+              rowLink(kanaGuides[kanaRows.length + start + i]) +
               r.items
                 .map((item) => {
                   const char = item[session.kanaType];
@@ -744,8 +810,32 @@ function extraSounds() {
     .join("");
 }
 function kanaView() {
+  const bookmark = guideById.get(state.kanaBookmark.split("/")[1]);
+  const resume = bookmark && !state.kanaDone.includes(bookmark.id);
+  const next = resume
+    ? bookmark
+    : kanaGuides.find((g) => !state.kanaDone.includes(g.id)) || kanaGuides[0];
+  const basicDone = kanaGuides
+    .slice(0, kanaRows.length)
+    .filter((g) => state.kanaDone.includes(g.id)).length;
+  const intro =
+    '<section class="guide-intro"><div><h2>逐行跟练</h2><p>每一行先听音、看笔顺，再留出时间让你开口。最后用旅行或动漫里遇到的词做听辨。</p><small>基础已练 ' +
+    basicDone +
+    " / " +
+    kanaRows.length +
+    ' 组 · 含拨音ん</small></div><a class="btn primary" href="' +
+    (resume
+      ? state.kanaBookmark
+      : guideURL(next.id, "listen", session.kanaType)) +
+    '">' +
+    (resume ? "继续练" + next.title : "从" + next.title + "开始") +
+    " " +
+    ic("arrow") +
+    "</a></section>";
   return (
-    '<div class="inner"><h1>五十音图</h1><p class="lead">先从第一行「あ・い・う・え・お」开始。点一个字，查看它的写法、笔顺和发音。</p><div class="toolbar">' +
+    '<div class="inner"><h1>五十音图</h1><p class="lead">点行名进入跟练，点单个假名快速查看笔顺和发音。</p>' +
+    intro +
+    '<div class="toolbar">' +
     [
       ["hira", "平假名"],
       ["kata", "片假名"],
@@ -769,10 +859,8 @@ function kanaView() {
       .join("") +
     kanaRows
       .map(
-        (r) =>
-          '<span class="row-name">' +
-          r.name +
-          "</span>" +
+        (r, i) =>
+          rowLink(kanaGuides[i]) +
           r.items
             .map((item) =>
               item
@@ -936,18 +1024,55 @@ function about() {
           "</p></article>",
       )
       .join("") +
-    '</div><div class="section-head"><h2>笔顺、语音与插画</h2></div><div class="bibliography"><article><h3>假名笔顺</h3><p>笔画数据取自 Ulrich Apel 的 <a href="https://kanjivg.tagaini.net/">KanjiVG</a>。本站提取了 92 个假名的笔画路径并制作逐笔动画，衍生路径沿用 <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>。</p></article><article><h3>日语朗读</h3><p>使用 Open JTalk 和 Mei 声库生成教学音频。慢速播放保留音高。</p><p><a href="https://github.com/haoyunLi/nihongo-biyori/blob/main/assets/audio/CREDITS.md">语音来源与许可 ↗</a></p></article><article><h3>视觉素材</h3><p>海滨电车与三幅课程封面为本站生成的原创插画。中文标题使用 Noto Serif SC 的嵌入子集。<a href="./assets/fonts/OFL.txt">字体许可</a></p></article></div></div>'
+    '</div><div class="section-head"><h2>笔顺、语音与插画</h2></div><div class="bibliography"><article><h3>假名笔顺</h3><p>笔画数据取自 Ulrich Apel 的 <a href="https://kanjivg.tagaini.net/">KanjiVG</a>。本站提取了基本假名、浊音和小假名的笔画路径并制作逐笔动画，衍生路径沿用 <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>。</p></article><article><h3>日语朗读</h3><p>五十音跟练中的 104 个音来自 FUN Japanese Learning 的真人示范。部分情景词取自 Tofugu、WaniKani 和 Wikimedia Commons 的真人词汇录音，其余表达使用 VOICEVOX Nemo 日语配音。</p><p><a href="https://github.com/haoyunLi/nihongo-biyori/blob/main/assets/audio/CREDITS.md">语音来源与许可 ↗</a></p></article><article><h3>视觉素材</h3><p>海滨电车与三幅课程封面为本站生成的原创插画。中文标题使用 Noto Serif SC 的嵌入子集。<a href="./assets/fonts/OFL.txt">字体许可</a></p></article></div></div>'
   );
 }
+let guideOrigin = null;
+const guideContext = {
+  returnLink: () =>
+    guideOrigin
+      ? '<p class="guide-return"><a class="text-link" href="' +
+        guideOrigin.href +
+        '">回到课文《' +
+        esc(guideOrigin.title) +
+        "》</a></p>"
+      : "",
+  silence,
+  soundButton,
+  notify,
+  slow: () => state.slow,
+  setSlow(value) {
+    state.slow = value;
+    save();
+  },
+  complete(id) {
+    if (!state.kanaDone.includes(id)) state.kanaDone.push(id);
+    save();
+  },
+};
 function go() {
   if (location.hash === "#main") {
     main.focus();
     return;
   }
   silence();
-  const [raw, arg, num] = location.hash.slice(1).split("/");
+  const [raw, arg, num, script] = location.hash.slice(1).split("/");
   route = raw || "home";
   if (route === "lesson" && !lessonById.has(arg)) route = "missing";
+  if (route === "kana" && arg && !guideById.has(arg)) route = "missing";
+  if (route === "kana" && arg && guideById.has(arg)) {
+    if (currentLesson)
+      guideOrigin = {
+        href: lessonURL(currentLesson.id, stageIndex),
+        title: currentLesson.title,
+      };
+    const stage = ["words", "check"].includes(num) ? num : "listen";
+    const bookmark = guideURL(arg, stage, script === "kata" ? "kata" : "hira");
+    if (state.kanaBookmark !== bookmark) {
+      state.kanaBookmark = bookmark;
+      save();
+    }
+  } else guideOrigin = null;
   const sameLesson = route === "lesson" && navKey === arg;
   navKey = route === "lesson" ? arg : route;
   currentLesson = route === "lesson" ? lessonById.get(arg) : null;
@@ -976,7 +1101,7 @@ function go() {
   const view = {
     home,
     courses: courseView,
-    kana: kanaView,
+    kana: () => (arg ? guideView(arg, num, script, guideContext) : kanaView()),
     lesson: () => lessonView(currentLesson),
     review: reviewView,
     about,
@@ -994,7 +1119,10 @@ function go() {
     {
       home: "从零开始学日语",
       courses: "课程路线",
-      kana: "五十音图",
+      kana:
+        arg && guideById.has(arg)
+          ? guideById.get(arg).title + " · 逐行跟练"
+          : "五十音图",
       review: "复习手帖",
       about: "教材与素材来源",
     }[route] ||
@@ -1060,10 +1188,17 @@ function updateKana(button, changeScript) {
       .scrollIntoView({ block: "nearest", behavior: "instant" });
   else window.scrollTo({ top: oldTop, behavior: "instant" });
 }
+main.addEventListener("change", (e) => {
+  if (e.target.matches("[data-guide-select]")) changeGuideRow(e.target.value);
+});
 main.addEventListener("click", (e) => {
   const button = e.target.closest("button[data-action]");
   if (!button) return;
   const { action, key } = button.dataset;
+  if (action.startsWith("guide-")) {
+    handleGuide(button, guideContext);
+    return;
+  }
   switch (action) {
     case "sound":
       void playOne(button);
@@ -1197,5 +1332,6 @@ document.querySelector(".skip").addEventListener("click", (e) => {
   e.preventDefault();
   main.focus();
 });
+window.addEventListener("pagehide", silence);
 window.addEventListener("hashchange", go);
 go();

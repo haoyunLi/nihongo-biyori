@@ -753,6 +753,7 @@ footer > div {
   stroke: var(--ink);
 }
 .stroke-ink.drawing {
+  opacity: 0;
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
   animation: draw 0.57s ease-in-out forwards;
@@ -864,7 +865,11 @@ footer > div {
   }
 }
 @keyframes draw {
+  from {
+    opacity: 1;
+  }
   to {
+    opacity: 1;
     stroke-dashoffset: 0;
   }
 }
@@ -1111,6 +1116,7 @@ footer > div {
     transition: none !important;
   }
   .stroke-ink.drawing {
+    opacity: 1;
     stroke-dashoffset: 0;
   }
 }
@@ -1142,4 +1148,230 @@ footer > div {
 .prompt-row {
   background: #e7ece255;
   padding-inline: 12px;
+}
+
+/* Row lessons share the type, ink and paper palette of the main course reader. */
+.guide-intro,
+.guide-head,
+.guide-controls {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+}
+.guide-intro {
+  padding: 18px clamp(15px, 2.6vw, 32px);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--red);
+  margin: 14px 0 22px;
+  background: #eee7db77;
+}
+.guide-intro h2 {
+  font-size: clamp(21px, 2vw, 28px);
+  margin-bottom: 4px;
+}
+.guide-intro .btn {
+  flex-shrink: 0;
+}
+.guide-intro small {
+  color: var(--sage);
+}
+.guide-link {
+  color: var(--red);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.guide-reader {
+  max-width: 900px;
+}
+.guide-reader .lead {
+  margin: 5px 0 0;
+  font-size: clamp(19px, 2.4vw, 29px);
+  letter-spacing: 0.1em;
+}
+.guide-head label {
+  font-size: 14px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.guide-head select {
+  margin-left: 5px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 5px 9px;
+}
+.guide-tabs {
+  margin: 20px 0 18px;
+}
+.guide-sheet {
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #fffaf280;
+  padding: clamp(18px, 3vw, 35px);
+}
+.guide-sheet h2 {
+  font-size: clamp(23px, 3vw, 34px);
+  margin-bottom: 10px;
+}
+.guide-sheet .toolbar {
+  margin: 9px 0;
+}
+.guide-controls {
+  margin: 14px 0 9px;
+  flex-wrap: wrap;
+}
+.guide-controls .toolbar {
+  margin: 0;
+}
+.guide-symbols,
+.guide-word-tabs,
+.word-beats {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+.guide-symbol {
+  display: grid;
+  place-items: center;
+  min-width: 55px;
+  padding: 4px 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #fffaf280;
+}
+.guide-symbol b {
+  font-size: 26px;
+  line-height: 1.45;
+}
+.guide-symbol small {
+  font:
+    14px/1.4 Georgia,
+    serif;
+}
+.guide-symbol[aria-pressed="true"],
+.guide-word-tabs .tool[aria-pressed="true"] {
+  background: #f3dfd2;
+  border-color: var(--red);
+  color: var(--red);
+}
+.guide-selected {
+  display: grid;
+  grid-template-columns: minmax(115px, 185px) minmax(0, 1fr);
+  align-items: center;
+  gap: clamp(14px, 3vw, 28px);
+  padding: 15px 0;
+  margin: 13px 0;
+  border-block: 1px solid var(--line);
+}
+.guide-board .stroke-board {
+  margin: 0;
+  width: 100%;
+}
+.stroke-board.pair {
+  background-size: 50% 100%;
+}
+.guide-letter-info h2 {
+  font-family: var(--jp);
+  font-size: 36px;
+  margin-bottom: 4px;
+}
+.guide-letter-info h2 small {
+  font:
+    20px Georgia,
+    serif;
+  color: var(--muted);
+}
+.guide-letter-info .reading {
+  margin: 4px 0;
+}
+.guide-status {
+  color: var(--sage);
+  font-weight: 700;
+  min-height: 1.65em;
+}
+.guide-word-tabs {
+  margin: 14px 0 0;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--line);
+}
+.word-practice {
+  margin: 17px 0 0;
+}
+.word-practice h2 {
+  font-size: clamp(30px, 4vw, 45px);
+}
+.word-beats {
+  margin: 13px 0 4px;
+}
+.word-beats span {
+  display: inline-grid;
+  place-items: center;
+  min-width: 37px;
+  padding: 4px 7px;
+  background: #eae4d9;
+  border-radius: 4px;
+  font-size: 22px;
+}
+.word-beats .target {
+  color: var(--red-deep);
+  background: #f4ddce;
+}
+.word-scene {
+  margin: 12px 0;
+}
+.guide-sheet .feedback {
+  margin-bottom: 13px;
+}
+.lesson-row-links {
+  margin: 14px 0;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+}
+.lesson-row-links h3 {
+  font-size: 17px;
+  margin-bottom: 8px;
+}
+@media (max-width: 650px) {
+  .guide-intro {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .guide-head {
+    align-items: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .guide-tabs {
+    gap: 0;
+  }
+  .guide-tabs a {
+    padding: 8px 7px;
+    font-size: 14px;
+  }
+  .guide-selected {
+    grid-template-columns: minmax(85px, 0.55fr) minmax(0, 1fr);
+    gap: 12px;
+  }
+  .guide-letter-info h2 {
+    font-size: 25px;
+  }
+  .guide-symbol {
+    min-width: 43px;
+    padding: 4px 6px;
+  }
+  .guide-sheet {
+    padding: 15px;
+  }
+}
+.stroke-board .current-stroke {
+  stroke: var(--red);
+}
+.stroke-count {
+  color: var(--red-deep);
+}
+.guide-return {
+  margin-top: 16px;
 }

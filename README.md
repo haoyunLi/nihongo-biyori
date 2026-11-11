@@ -10,6 +10,8 @@
 | 旅行日语 · 6 课 | 问路、站台、旅馆入住、餐厅点餐、付款、找回遗失物品 |
 | 二次元日语 · 5 课 | 讨论喜欢的作品、展会购票、选购周边、询问拍摄许可、辨别朋友口语和角色台词 |
 
+五十音图的 11 组基础音（含拨音）和 16 组扩展音都有独立跟练页。点行名可逐字听音、看平假名或片假名笔顺，留白跟读，再用旅行及动漫情景词练习和自测。[从あ行开始](https://haoyunli.github.io/nihongo-biyori/#kana/a)
+
 每节课包含分步讲解、例句、分角色对话、听辨题和答题解析。「我来接话」可隐藏学习者的日语台词。星标表达可在复习手帖中翻卡，答错的题会进入错题本。进度、收藏和错题保存在当前浏览器的本地存储中。音频随网站提供，支持慢速播放。
 
 ## 本地预览
@@ -26,7 +28,7 @@ python3 -m http.server 8000
 
 课程参考国际交流基金教材的学习目标和情景设计，站内讲解、情景和题目为本项目编写。延伸阅读见[教材与素材来源](https://haoyunli.github.io/nihongo-biyori/#about)。
 
-- 92 个假名的笔画取自 [KanjiVG](https://github.com/KanjiVG/kanjivg/tree/610091ce618cf757ed1357a8954cd65283e015d6)，© Ulrich Apel。本站提取了原始路径，数据和衍生笔画沿用 [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/)。
-- 朗读音频使用 Open JTalk 和 Mei 合成。[语音署名与许可](./assets/audio/CREDITS.md)
+- 148 个基本、浊音及小假名字形的笔画取自 [KanjiVG](https://github.com/KanjiVG/kanjivg/tree/610091ce618cf757ed1357a8954cd65283e015d6)，© Ulrich Apel。本站提取了原始路径，数据和衍生笔画沿用 [CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/)。
+- 音图里的 104 个音使用真人录音。情景词结合真人词典录音和 VOICEVOX Nemo，完整句对话分角色配音。[语音署名与许可](./assets/audio/CREDITS.md)
 - 嵌入的 Noto Serif SC 为中文标题字体子集。[SIL Open Font License](./assets/fonts/OFL.txt)
 - 四幅封面插画使用图像生成工具为本站制作。

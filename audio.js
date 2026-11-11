@@ -1,11 +1,12 @@
-import { clips } from "./assets/audio/catalog.js";
+import { clips, replyClips } from "./assets/audio/catalog.js?v=3";
 
 const audioDirectory = new URL("./assets/audio/", import.meta.url);
 let active = null;
 
-function lookup(text) {
+function lookup(text, learner = false) {
   // Spaces between phrases and ruby readings can differ across learning views.
   const key = text.normalize("NFKC").replace(/\s/gu, "");
+  if (learner && Object.hasOwn(replyClips, key)) return replyClips[key];
   return Object.hasOwn(clips, key) ? clips[key] : null;
 }
 
@@ -54,7 +55,7 @@ function nativeVoice(task, text, slow) {
   }
 }
 
-export function speak(text, slow = false, reading = "") {
+export function speak(text, slow = false, reading = "", learner = false) {
   stopAudio();
   const words = String(text || "").trim();
   if (!words) return Promise.resolve();
@@ -85,13 +86,13 @@ export function speak(text, slow = false, reading = "") {
     }
     active = task;
 
-    const file = lookup(words) || (reading && lookup(reading));
+    const file = lookup(words, learner) || (reading && lookup(reading));
     if (!file || typeof globalThis.Audio !== "function") {
       nativeVoice(task, words, slow);
       return;
     }
-    const player = new Audio(new URL(file + ".mp3", audioDirectory).href);
-    player.playbackRate = slow ? 0.74 : 1;
+    const player = new Audio(new URL(file + ".mp3?v=3", audioDirectory).href);
+    player.playbackRate = slow ? 0.84 : 1;
     player.preservesPitch = true;
     task.cleanup = () => {
       player.onended = null;
