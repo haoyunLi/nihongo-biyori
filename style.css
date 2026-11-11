@@ -1375,3 +1375,249 @@ footer > div {
 .guide-return {
   margin-top: 16px;
 }
+
+.practice-entry,
+.practice-feature,
+.practice-sheet {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fffaf380;
+  padding: clamp(18px, 3vw, 32px);
+}
+.practice-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin: 20px 0;
+}
+.practice-entry h2,
+.practice-feature h2,
+.practice-sheet h2 {
+  font-size: clamp(23px, 2.55vw, 35px);
+  margin: 0 0 10px;
+}
+.practice-entry p,
+.scene-intro,
+.practice-method p {
+  color: var(--muted);
+}
+.practice-feature {
+  margin-top: 20px;
+  border-left: 4px solid var(--red);
+}
+.practice-feature .btn,
+.practice-sheet > .btn,
+.practice-sheet > .tool {
+  margin-top: 14px;
+}
+.scene-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 24px;
+  margin: 18px 0;
+}
+.scene-link {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 12px;
+  padding: 15px 4px;
+  border-block-start: 1px solid var(--line);
+}
+.scene-link span:first-child {
+  grid-column: 1;
+  color: var(--sage);
+  font-size: 14px;
+}
+.scene-link strong {
+  grid-column: 1;
+  font: 700 23px/1.4 var(--serif);
+}
+.scene-link span:last-child {
+  grid-column: 2;
+  grid-row: 1/3;
+  align-self: center;
+  color: var(--red);
+}
+.scene-link:hover strong {
+  color: var(--red);
+}
+.practice-sheet {
+  margin: 20px 0;
+}
+.practice-sheet .actions,
+.scene-choices {
+  margin-top: 14px;
+}
+.practice-sheet .small-label {
+  margin-bottom: 12px;
+}
+.practice-sheet .feedback {
+  margin: 15px 0;
+}
+.practice-source,
+.practice-method {
+  margin: 16px 0 0;
+  font-size: 15px;
+}
+.practice-method {
+  border-top: 1px solid var(--line);
+  padding-top: 12px;
+}
+.practice-method p {
+  margin-top: 8px;
+}
+.recall-glyph {
+  font-size: clamp(68px, 9vw, 104px);
+  text-align: center;
+  line-height: 1.4;
+  margin: 9px 0 14px;
+}
+.recall-input {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.recall-input input {
+  font-size: 19px;
+  min-width: 0;
+  width: 10em;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--paper);
+  padding: 9px 12px;
+}
+.recall-prompt {
+  font-size: clamp(20px, 2.5vw, 28px);
+}
+.recall-model {
+  border-left: 3px solid var(--sage);
+  padding: 10px 15px;
+  background: #e7eee466;
+  margin: 14px 0;
+}
+.model-line {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+}
+.model-line strong {
+  font-size: clamp(21px, 2.6vw, 30px);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.schedule-note {
+  color: var(--sage);
+  margin: 14px 0;
+}
+.recall-results {
+  list-style: none;
+  padding: 0;
+}
+.recall-results li {
+  display: flex;
+  gap: 7px 16px;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding: 9px 0;
+  flex-wrap: wrap;
+}
+.recall-results a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.recall-results span {
+  font-size: 14px;
+  color: var(--muted);
+}
+.scene-cue {
+  padding: 12px;
+  background: #e7eee47a;
+  border-radius: 4px;
+  margin: 0 0 17px;
+}
+.scene-choices {
+  margin: 0 0 15px;
+}
+.scene-choices [aria-pressed="true"] {
+  color: var(--red);
+  border-color: var(--red);
+  background: #f7e5db;
+}
+.sentence-tray,
+.tile-bank {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.sentence-tray {
+  margin: 18px 0 10px;
+  min-height: 64px;
+  padding: 9px;
+  border: 1px dashed #9e9483;
+  border-radius: 5px;
+  background: var(--light);
+}
+.tile-bank {
+  margin: 12px 0 20px;
+}
+.phrase-chip {
+  background: var(--paper);
+  font-size: clamp(17px, 2.2vw, 21px);
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  min-height: 42px;
+}
+.phrase-chip:not(:disabled):hover,
+.phrase-chip.picked {
+  border-color: var(--red);
+}
+.phrase-chip:disabled {
+  opacity: 0.4;
+}
+.reply-title {
+  font-size: 18px;
+  margin-top: 16px;
+}
+@media (max-width: 650px) {
+  .practice-entry {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .scene-list {
+    grid-template-columns: 1fr;
+  }
+  .scene-link strong {
+    font-size: 21px;
+  }
+  .practice-sheet {
+    padding: 16px;
+  }
+  .tile-bank,
+  .sentence-tray {
+    gap: 6px;
+  }
+  .phrase-chip {
+    padding: 5px 9px;
+  }
+}
+.phrase-chip small {
+  display: block;
+  font: 13px/1.4 var(--sans);
+  color: var(--muted);
+}
+.reading-switch {
+  margin-top: 4px;
+}
+.ear-prompt {
+  margin: 14px 0;
+}
+.ear-prompt .sound {
+  width: 46px;
+  height: 46px;
+}

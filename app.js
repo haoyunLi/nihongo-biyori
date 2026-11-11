@@ -1,4 +1,6 @@
 import { lessons, references } from "./lessons.js";
+import { createPractice } from "./practice.js";
+import { sceneById } from "./scenes.js";
 import { kanaRows, kanaNotes, extraKana } from "./kana.js";
 import { strokes } from "./strokes.js?v=3";
 import { kanaGuides, guideById } from "./kana-guides.js";
@@ -9,7 +11,7 @@ import {
   handleGuide,
   changeGuideRow,
   stopGuidePlayback,
-} from "./guide-view.js";
+} from "./guide-view.js?v=4";
 import { speak, stopAudio } from "./audio.js?v=3";
 
 const tracks = [
@@ -129,6 +131,15 @@ function save() {
   }
 }
 const main = document.querySelector("main");
+const practice = createPractice({
+  state,
+  examples,
+  soundButton,
+  starButton,
+  esc,
+  silence,
+  notify,
+});
 const session = {
   reviewTab: "saved",
   reviewIndex: 0,
@@ -309,7 +320,8 @@ function home() {
     soundButton(today.jp, "播放今日一句", today.kana) +
     '<span class="daily-zh">' +
     esc(today.zh) +
-    "</span></section>"
+    "</span></section>" +
+    practice.entry()
   );
 }
 function courseView() {
@@ -606,7 +618,19 @@ function lessonGuideLinks(id, n) {
 }
 function readerStage(l) {
   const n = stageIndex;
-  if (n === l.steps.length + 1) return quizStage(l);
+  if (n === l.steps.length + 1) {
+    const extra = sceneById.has(l.id)
+      ? '<a class="btn" href="#practice/scene/' +
+        l.id +
+        '">把本课用在情景里 →</a>'
+      : '<a class="btn" href="#practice/daily">去今日复习 →</a>';
+    return (
+      quizStage(l) +
+      (session.finished
+        ? '<div class="lesson-row-links">' + extra + "</div>"
+        : "")
+    );
+  }
   let content = "";
   if (n < l.steps.length) {
     const part = l.steps[n];
@@ -667,6 +691,11 @@ function readerStage(l) {
   }
   return (
     content +
+    (n === l.steps.length && sceneById.has(l.id)
+      ? '<div class="lesson-row-links"><a class="text-link" href="#practice/scene/' +
+        l.id +
+        '">自己拼一句，练习这个情景 →</a></div>'
+      : "") +
     lessonGuideLinks(l.id, n) +
     '<div class="stage-footer">' +
     (n > 0
@@ -823,7 +852,7 @@ function kanaView() {
     basicDone +
     " / " +
     kanaRows.length +
-    ' 组 · 含拨音ん</small></div><a class="btn primary" href="' +
+    ' 组 · 含拨音ん</small> · <a class="text-link" href="#practice/daily">今日混合复习</a></div><a class="btn primary" href="' +
     (resume
       ? state.kanaBookmark
       : guideURL(next.id, "listen", session.kanaType)) +
@@ -984,7 +1013,9 @@ function reviewView() {
     state.done.filter((id) => lessonById.has(id)).length +
     " / " +
     lessons.length +
-    '</p><div class="toolbar review-tabs">' +
+    "</p>" +
+    practice.entry() +
+    '<div class="toolbar review-tabs">' +
     [
       ["saved", "收藏表达", state.saved.filter((k) => examples.has(k)).length],
       ["mistakes", "错题本", state.mistakes.filter(validMistake).length],
@@ -1029,6 +1060,7 @@ function about() {
 }
 let guideOrigin = null;
 const guideContext = {
+  flagMiss: practice.flagMiss,
   returnLink: () =>
     guideOrigin
       ? '<p class="guide-return"><a class="text-link" href="' +
@@ -1058,6 +1090,13 @@ function go() {
   silence();
   const [raw, arg, num, script] = location.hash.slice(1).split("/");
   route = raw || "home";
+  if (route !== "practice" || arg !== "daily") practice.leaveDaily();
+  if (
+    route === "practice" &&
+    arg &&
+    !(arg === "daily" || (arg === "scene" && sceneById.has(num)))
+  )
+    route = "missing";
   if (route === "lesson" && !lessonById.has(arg)) route = "missing";
   if (route === "kana" && arg && !guideById.has(arg)) route = "missing";
   if (route === "kana" && arg && guideById.has(arg)) {
@@ -1103,13 +1142,15 @@ function go() {
     courses: courseView,
     kana: () => (arg ? guideView(arg, num, script, guideContext) : kanaView()),
     lesson: () => lessonView(currentLesson),
+    practice: () => practice.view(arg, num),
     review: reviewView,
     about,
   };
   main.innerHTML = Object.hasOwn(view, route)
     ? view[route]()
     : '<div class="inner"><h1>没有找到这一页</h1><p class="lead"><a class="text-link" href="#home">返回学习首页</a></p></div>';
-  const active = route === "lesson" ? "courses" : route;
+  const active =
+    route === "lesson" ? "courses" : route === "practice" ? "review" : route;
   document.querySelectorAll("nav a").forEach((a) => {
     if (a.hash === "#" + active) a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
@@ -1124,6 +1165,7 @@ function go() {
           ? guideById.get(arg).title + " · 逐行跟练"
           : "五十音图",
       review: "复习手帖",
+      practice: practice.title(arg, num),
       about: "教材与素材来源",
     }[route] ||
     "页面未找到";
@@ -1191,10 +1233,20 @@ function updateKana(button, changeScript) {
 main.addEventListener("change", (e) => {
   if (e.target.matches("[data-guide-select]")) changeGuideRow(e.target.value);
 });
+main.addEventListener("submit", (e) => {
+  if (e.target.matches("[data-recall-form]")) {
+    e.preventDefault();
+    practice.submit(e.target);
+  }
+});
 main.addEventListener("click", (e) => {
   const button = e.target.closest("button[data-action]");
   if (!button) return;
   const { action, key } = button.dataset;
+  if (action.startsWith("recall-") || action.startsWith("scene-")) {
+    practice.handle(button);
+    return;
+  }
   if (action.startsWith("guide-")) {
     handleGuide(button, guideContext);
     return;

@@ -356,6 +356,7 @@ function checkView(ctx) {
           " →</a>"
         : '<a class="btn primary" href="#courses/travel">去旅行篇运用 →</a>') +
       toggle("再测一次", "guide-reset") +
+      '<a class="text-link" href="#practice/daily">加入混合复习 →</a>' +
       "</div></div>"
     );
   }
@@ -396,7 +397,9 @@ function checkView(ctx) {
       : '<p class="feedback ' +
         (correct ? "" : "error") +
         '" role="status">' +
-        (correct ? "答对了。" + q.why : "再听一遍，选一个不同的答案。") +
+        (correct
+          ? "答对了。" + q.why
+          : "这个音或词已记入待复习内容。再听一遍，试试另一个答案。") +
         "</p>") +
     (correct
       ? '<button class="btn primary" data-action="guide-next-question">' +
@@ -586,6 +589,12 @@ export function handleGuide(button, ctx) {
     case "guide-answer": {
       const q = rowState.quiz[rowState.question];
       rowState.answer = q.choices[Number(index)];
+      if (rowState.answer !== q.answer)
+        ctx.flagMiss(
+          q.glyphs
+            ? "kana:" + q.audio
+            : "word:" + rowState.guide.id + ":" + q.audio,
+        );
       redraw(
         ctx,
         rowState.answer === q.answer
