@@ -1962,6 +1962,7 @@ footer > div {
   border-bottom: 2px solid transparent;
 }
 .beat-excerpt[data-phase="reference"] [data-voice="reference"],
+.beat-excerpt[data-phase="previous"] [data-voice="previous"],
 .beat-excerpt[data-phase="take"] [data-voice="take"] {
   color: #25533e;
   font-weight: 700;
@@ -1993,4 +1994,23 @@ footer > div {
 }
 .beat-excerpt[data-sounding] .excerpt-kana mark {
   outline: 2px solid #915c37;
+}
+.beat-excerpt .part-status,
+.beat-excerpt .part-comparison {
+  margin: 8px 0 0;
+  font-size: 14px;
+}
+.part-comparison {
+  padding-left: 9px;
+  border-left: 2px solid #638373;
+}
+.beat-excerpt button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.rhythm-feedback .whole-feedback-label {
+  margin: 0 0 3px;
+  color: #4a6252;
+  font-size: 13px;
 }

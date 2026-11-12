@@ -1,4 +1,4 @@
-import { createRecorder, recordingButton } from "./recording.js?v=7";
+import { createRecorder, recordingButton } from "./recording.js?v=8";
 import { contrastById } from "./contrast-data.js";
 import {
   contrastView,

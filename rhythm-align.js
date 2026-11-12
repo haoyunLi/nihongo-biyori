@@ -387,3 +387,19 @@ export function compareAlignment(ref, take, slow = false) {
     stats,
   };
 }
+
+// Both recordings are excerpts here. Recompute the template on this window
+// so spectral normalization, expected phones and speaking rate use its scope.
+export function comparePart(reference, take, groups, selection, model) {
+  const first = groups.findIndex((g) => g.first === selection.first);
+  const last = groups.findIndex((g) => g.first === selection.last);
+  if (first < 0 || last < first)
+    return { status: "uncertain", reason: "alignment" };
+  const local = groups.slice(first, last + 1); // Includes pauses between groups.
+  if (local.length === 1 && local[0].phones.includes("q"))
+    return { status: "uncertain", reason: "closure" };
+  return compareAlignment(
+    measure(reference, local, model),
+    measure(take, local, model),
+  );
+}

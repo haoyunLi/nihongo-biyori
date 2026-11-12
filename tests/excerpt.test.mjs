@@ -82,3 +82,35 @@ test("the pair contains the exact samples from the two independent windows with 
     ),
   );
 });
+
+test("the third track advances from the original sentence to the two latest local takes", async () => {
+  const pcm = (x) => new Float32Array(1600).fill(x);
+  const samples = { reference: pcm(0.25), take: pcm(0.5) };
+  const range = { reference: [0, 100], take: [0, 100] };
+  const one = { pcm: pcm(-0.25), bounds: [10, 60] },
+    two = { pcm: pcm(-0.5), bounds: [30, 100] };
+  for (const [history, expected] of [
+    [[one], [0.25, 0.5, -0.25]],
+    [
+      [one, two],
+      [0.25, -0.25, -0.5],
+    ],
+  ]) {
+    const wave = excerptWave(samples, range, history);
+    assert.deepEqual(
+      wave.phases.map((p) => p.voice),
+      ["reference", "previous", "take"],
+    );
+    const bytes = new DataView(await wave.blob.arrayBuffer());
+    for (const [i, phase] of wave.phases.entries()) {
+      const pos = Math.round(phase.start * 16000) + 100;
+      assert.equal(
+        bytes.getInt16(44 + 2 * pos, true),
+        Math.round(expected[i] * (expected[i] < 0 ? 32768 : 32767)),
+      );
+      assert.ok(
+        Math.abs((phase.end - phase.start) * 16000 - phase.audio.length) < 1e-5,
+      );
+    }
+  }
+});

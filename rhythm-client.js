@@ -1,3 +1,4 @@
+import { cut } from "./rhythm-excerpt.js?v=8";
 import { clipStem } from "./clip-source.js";
 
 const unavailable = (reason = "unavailable") => ({
@@ -48,6 +49,55 @@ export function createTimingSession(target) {
     worker = null;
     finish(unavailable());
   }
+  function run(id, ref, take, slow, part) {
+    if (!worker) {
+      worker = new Worker(new URL("./rhythm-worker.js?v=8", import.meta.url), {
+        type: "module",
+      });
+      worker.onmessage = ({ data }) => {
+        if (pending?.id === data.id) finish(data.result);
+      };
+      worker.onerror = stop;
+    }
+    return new Promise((resolve) => {
+      pending = { id, resolve, timer: setTimeout(stop, 30000) };
+      // Clone into the worker so the main thread keeps the matching PCM for excerpts.
+      worker.postMessage({
+        id,
+        stem,
+        reading: target.reading || target.reference,
+        slow,
+        part,
+        reference: ref,
+        take,
+      });
+    });
+  }
+  async function analyzePart(blob, selection) {
+    const id = ++number;
+    finish(unavailable());
+    let pcm;
+    try {
+      pcm = await decode(await blob.arrayBuffer());
+      if (closed || id !== number || !samples) return null;
+      const ref = cut(samples.reference, selection.reference);
+      const result = await run(id, ref, pcm, false, {
+        first: selection.first,
+        last: selection.last,
+      });
+      if (closed || id !== number) return null;
+      const units = result.units;
+      const bounds = units
+        ? [units[0].start, units.at(-1).end]
+        : [0, pcm.length / 16];
+      return { pcm, bounds, units, reason: result.reason };
+    } catch {
+      if (id === number) finish(unavailable());
+      return pcm && !closed && id === number
+        ? { pcm, bounds: [0, pcm.length / 16], reason: "unavailable" }
+        : null;
+    }
+  }
   async function analyze(blob, slow) {
     if (!stem) return unavailable("reference");
     const id = ++number;
@@ -72,30 +122,7 @@ export function createTimingSession(target) {
         blob.arrayBuffer().then(decode),
       ]);
       if (closed || id !== number) return unavailable();
-      if (!worker) {
-        worker = new Worker(
-          new URL("./rhythm-worker.js?v=7", import.meta.url),
-          {
-            type: "module",
-          },
-        );
-        worker.onmessage = ({ data }) => {
-          if (pending?.id === data.id) finish(data.result);
-        };
-        worker.onerror = stop;
-      }
-      const result = await new Promise((resolve) => {
-        pending = { id, resolve, timer: setTimeout(stop, 30000) };
-        // Clone into the worker so the main thread keeps the matching PCM for excerpts.
-        worker.postMessage({
-          id,
-          stem,
-          reading: target.reading || target.reference,
-          slow,
-          reference: ref,
-          take,
-        });
-      });
+      const result = await run(id, ref, take, slow);
       if (!closed && id === number && result.status === "measured")
         samples = { reference: ref, take };
       return result;
@@ -108,6 +135,7 @@ export function createTimingSession(target) {
   }
   return {
     analyze,
+    analyzePart,
     get samples() {
       return samples;
     },

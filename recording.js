@@ -1,6 +1,6 @@
-import { createTimingSession } from "./rhythm-client.js?v=7";
-import { renderFeedback } from "./rhythm-feedback.js?v=7";
-import { createExcerptPlayer } from "./excerpt-player.js";
+import { createTimingSession } from "./rhythm-client.js?v=8";
+import { renderFeedback } from "./rhythm-feedback.js?v=8";
+import { createExcerptPlayer } from "./excerpt-player.js?v=8";
 
 // Only a user gesture inside the open panel starts microphone capture.
 const micIcon =
@@ -35,6 +35,7 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
     excerptPreferences,
     result,
     previousResult,
+    partCapture = null,
     analysisRound = 0,
     timer,
     launch = 0,
@@ -56,9 +57,12 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
 
   function controls() {
     const busy = state !== "idle";
-    el("[data-rhythm]").hidden = busy || !clip;
-    el('[data-rec="capture"]').textContent =
-      state === "request"
+    const partBusy = Boolean(partCapture && busy);
+    el("[data-rhythm]").hidden = (busy && !partBusy) || !clip;
+    excerpt?.captureState(state, partCapture, supported());
+    el('[data-rec="capture"]').textContent = partBusy
+      ? "重读整句"
+      : state === "request"
         ? "正在请求麦克风"
         : state === "recording"
           ? "停止录音"
@@ -68,7 +72,7 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
               ? "重新录音"
               : "开始录音";
     el('[data-rec="capture"]').disabled =
-      !supported() || state === "request" || state === "finishing";
+      !supported() || partBusy || state === "request" || state === "finishing";
     el('[data-rec="retry-rhythm"]').disabled = busy || !supported();
     el('[data-rec="previous"]').hidden = !previousClip;
     for (const key of ["reference", "mine", "both", "previous"]) {
@@ -123,6 +127,7 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
     el("[data-rhythm]").hidden = true;
     target = null;
     state = "idle";
+    partCapture = null;
   }
   function close() {
     if (!target) return;
@@ -141,7 +146,7 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
       <div class="actions take-controls"><button class="tool" data-rec="mine" data-idle="听自己的录音">听自己的录音</button><button class="tool" data-rec="both" data-idle="依次听示范和自己">依次听示范和自己</button><button class="tool" data-rec="previous" data-idle="听上一遍" hidden>听上一遍</button></div>
       <p class="record-status" role="status" data-record-status></p>
       <section class="rhythm-feedback" aria-label="跟读节奏反馈" data-rhythm hidden><div data-feedback aria-live="polite"></div><button class="tool rhythm-retry" type="button" data-rec="retry-rhythm" hidden>按提示重读</button></section>
-      <p class="record-note">每遍最多 15 秒。录音和节奏分析只在本机进行，关闭窗口即清除。最多可回听最近两遍。</p>`;
+      <p class="record-note">每遍最多 15 秒。录音和节奏分析只在本机进行，关闭窗口即清除。整句与各个选区分别保留最近两遍。</p>`;
     document.body.append(panel);
     panel.addEventListener("cancel", (e) => {
       e.preventDefault();
@@ -160,10 +165,15 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
       }
       const key = e.target.closest("[data-rec]")?.dataset.rec;
       if (key === "close") close();
-      else if (key === "capture") {
-        if (state === "recording") finishCapture();
+      else if (key === "capture-part") {
+        if (state === "recording" && partCapture) finishCapture();
+        else if (state === "idle" && excerpt?.selection())
+          void capture(excerpt.selection());
+      } else if (key === "capture") {
+        if (state === "recording" && !partCapture) finishCapture();
         else if (state === "idle") void capture();
-      } else if (key === "retry-rhythm" && state === "idle") void capture();
+      } else if (key === "retry-rhythm" && state === "idle")
+        void capture(null, excerpt?.selection()?.index);
       else if (["reference", "mine", "both", "previous"].includes(key))
         void play(key);
     });
@@ -234,9 +244,38 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
     }
     feedback.setAttribute("aria-busy", "false");
     retry.hidden = false;
-    retry.textContent = result.units?.[result.target]
-      ? "按提示重读"
-      : "再读一遍";
+    retry.textContent = excerpt?.selection()
+      ? "回到整句重读"
+      : result.units?.[result.target]
+        ? "按提示重读"
+        : "再读一遍";
+    controls();
+  }
+  async function finishPart(blob, part, ticket) {
+    state = "analyzing-part";
+    controls();
+    const attempt = await timing.analyzePart(blob, part);
+    if (ticket !== launch || !target) return;
+    state = "idle";
+    if (!attempt) {
+      captureError("未能读取这遍片段，可以再次录制。");
+      return;
+    }
+    partCapture = null;
+    controls();
+    excerpt.addAttempt(part, attempt);
+  }
+  function showTime(text) {
+    el("[data-record-time]").textContent = partCapture ? "" : text;
+    const partTime = el("[data-part-time]");
+    if (partTime) partTime.textContent = partCapture ? text : "";
+  }
+  function captureError(message) {
+    showTime("");
+    if (partCapture && excerpt) excerpt.recordError(message);
+    else sayStatus(message);
+    partCapture = null;
+    state = "idle";
     controls();
   }
   function finishCapture() {
@@ -248,10 +287,7 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
     } catch {
       launch++;
       recorder = null;
-      state = "idle";
-      el("[data-record-time]").textContent = "";
-      sayStatus("设备已停止录音。可以再录一次。");
-      controls();
+      captureError("设备已停止录音。可以再录一次。");
     } finally {
       stopTracks();
     }
@@ -265,13 +301,14 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
       return "暂时无法读取麦克风，请检查设备或关闭占用麦克风的应用后重试。";
     return "这次录音未成功，请检查麦克风再试。";
   }
-  async function capture() {
+  async function capture(part = null, practicedIndex) {
+    partCapture = part;
     stopListening();
     const ticket = ++launch;
     const slowMode = slow();
     state = "request";
     controls();
-    sayStatus("请在浏览器提示中选择麦克风权限。");
+    sayStatus(part ? "" : "请在浏览器提示中选择麦克风权限。");
     try {
       const media = await navigator.mediaDevices.getUserMedia({ audio: true });
       if (ticket !== launch) {
@@ -298,29 +335,35 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
         launch++;
         stopTracks();
         recorder = null;
-        state = "idle";
-        el("[data-record-time]").textContent = "";
-        sayStatus("录音中断。请检查设备后重试。");
-        controls();
+        captureError("录音中断。请检查设备后重试。");
       };
       rec.onstop = () => {
         if (ticket !== launch) return;
         stopTracks();
         recorder = null;
         state = "idle";
-        el("[data-record-time]").textContent = "";
+        showTime("");
         if (chunks.length) {
-          if (previousClip) URL.revokeObjectURL(previousClip);
-          previousClip = clip;
-          previousResult = result;
-          result = null;
           const blob = new Blob(chunks, {
             type: rec.mimeType || chunks[0].type,
           });
+          if (part) {
+            void finishPart(blob, part, ticket);
+            return;
+          }
+          if (previousClip) URL.revokeObjectURL(previousClip);
+          previousClip = clip;
+          previousResult = result?.units?.[practicedIndex]?.reliable
+            ? { ...result, target: practicedIndex }
+            : result;
+          result = null;
           clip = URL.createObjectURL(blob);
           sayStatus("录好了。可以回听这一遍。");
           void analyze(blob, slowMode);
-        } else sayStatus("没有收到录音，请再试一次。");
+        } else {
+          captureError("没有收到录音，请再试一次。");
+          return;
+        }
         controls();
       };
       stream.getAudioTracks()[0]?.addEventListener(
@@ -333,12 +376,17 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
       rec.start();
       state = "recording";
       controls();
-      sayStatus("正在录音，请开口跟读。");
+      sayStatus(part ? "" : "正在录音，请开口跟读。");
+      if (
+        part &&
+        (document.activeElement === document.body ||
+          document.activeElement === panel)
+      )
+        el('[data-rec="capture-part"]').focus({ preventScroll: true });
       const start = performance.now();
       function tick() {
         const t = Math.floor((performance.now() - start) / 1000);
-        el("[data-record-time]").textContent =
-          Math.min(t, limit) + " / " + limit + " 秒";
+        showTime(Math.min(t, limit) + " / " + limit + " 秒");
         if (t >= limit) finishCapture();
       }
       tick();
@@ -347,10 +395,7 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
       if (ticket !== launch) return;
       stopTracks();
       recorder = null;
-      state = "idle";
-      el("[data-record-time]").textContent = "";
-      sayStatus(errorMessage(err));
-      controls();
+      captureError(errorMessage(err));
     }
   }
   function personal(url) {

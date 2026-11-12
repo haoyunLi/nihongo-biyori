@@ -1,9 +1,15 @@
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import test from "node:test";
+import { cut } from "../rhythm-excerpt.js";
 import { clipStem } from "../clip-source.js";
 import { features } from "../rhythm-features.js";
-import { makeGroups, measure, compareAlignment } from "../rhythm-align.js";
+import {
+  makeGroups,
+  measure,
+  compareAlignment,
+  comparePart,
+} from "../rhythm-align.js";
 
 const asset = (name) =>
   readFileSync(new URL("../assets/timing/" + name, import.meta.url));
@@ -97,5 +103,39 @@ test("site reference and independently varied long vowel produce directional fee
   assert.equal(
     compareAlignment(reference, { error: "quiet" }).status,
     "uncertain",
+  );
+});
+
+test("local scoring uses only the chosen utterance slice and preserves joined morae", () => {
+  const groups = makeGroups(plans[clipStem("ビール")], "ビール");
+  const reference = sample("reference"),
+    aligned = measure(reference, groups, model);
+  const unit = compareAlignment(aligned, aligned).units[0];
+  const onlyVowel = cut(reference, [unit.referenceStart, unit.referenceEnd]);
+  const local = comparePart(
+    onlyVowel,
+    onlyVowel,
+    groups,
+    { first: 0, last: 0 },
+    model,
+  );
+  assert.equal(local.status, "measured");
+  assert.equal(local.units.length, 1);
+  assert.deepEqual(local.units[0].labels, ["ビ", "ー"]);
+  assert.equal(local.units[0].ratio, 1);
+  assert.equal(
+    comparePart(onlyVowel, onlyVowel, groups, { first: 9, last: 0 }, model)
+      .status,
+    "uncertain",
+  );
+  assert.equal(
+    comparePart(
+      onlyVowel,
+      onlyVowel,
+      [{ first: 1, phones: ["q"] }],
+      { first: 1, last: 1 },
+      model,
+    ).reason,
+    "closure",
   );
 });

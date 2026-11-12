@@ -1,4 +1,4 @@
-import { excerptWindow, excerptWave } from "./rhythm-excerpt.js";
+import { excerptWindow, excerptWave } from "./rhythm-excerpt.js?v=8";
 
 export function createExcerptPlayer(
   host,
@@ -11,13 +11,14 @@ export function createExcerptPlayer(
   host.innerHTML = `<div class="excerpt-heading"><strong>片段对照</strong><span data-range></span></div>
     <p class="excerpt-kana" lang="ja" data-kana></p>
     <p class="excerpt-hint" data-hint hidden></p>
-    <div class="excerpt-order"><span data-voice="reference">示范</span> → <span data-voice="take">我的录音</span></div>
+    <div class="excerpt-order"><span data-voice="reference">示范</span> → <span data-middle hidden><span data-voice="previous">上一遍</span> → </span><span data-voice="take">我的录音</span></div>
     <div class="excerpt-settings">
       <label>范围<select data-scope><option value="context">带前后各两拍</option><option value="beat">只听选中拍</option></select></label>
       <label>速度<select data-rate><option value="1">原速 1×</option><option value=".75">慢放 0.75×</option></select></label>
       <label class="excerpt-loop"><input type="checkbox" data-loop>循环</label>
     </div>
-    <div class="excerpt-transport"><button class="tool" type="button" data-excerpt-play>播放片段</button></div>
+    <div class="excerpt-transport"><button class="tool" type="button" data-excerpt-play>播放片段</button><button class="tool" type="button" data-rec="capture-part">只重读这段</button></div>
+    <p class="part-status" role="status" data-part-status hidden></p><span class="record-time" aria-hidden="true" data-part-time></span><p class="part-comparison" data-part-comparison hidden></p>
     <p class="excerpt-error" role="status" data-error hidden></p>`;
   host.setAttribute("aria-label", "片段对照");
   host.setAttribute("aria-live", "off");
@@ -31,7 +32,13 @@ export function createExcerptPlayer(
   scope.value = preferences.context ? "context" : "beat";
   rate.value = preferences.rate === 1 ? "1" : ".75";
   loop.checked = preferences.loop;
-  let selected = null,
+  const history = new Map();
+  const partButton = el('[data-rec="capture-part"]'),
+    captureStatus = el("[data-part-status]"),
+    comparison = el("[data-part-comparison]");
+  let attempts = [],
+    key,
+    selected = null,
     range,
     audio,
     url,
@@ -41,24 +48,20 @@ export function createExcerptPlayer(
     playId = 0;
   function showPhase() {
     const t = audio?.currentTime ?? 0;
-    const phase = !active
-      ? ""
-      : t < wave.referenceEnd
-        ? "reference"
-        : t >= wave.takeStart && t < wave.takeEnd
-          ? "take"
-          : "";
-    if (host.dataset.phase !== phase) host.dataset.phase = phase;
-    // The focus stays marked. Outline it as the sound passes through it
-    // on each speaker's timeline, including when the native player loops.
-    const focus = units[selected];
+    const phase = active && wave.phases.find((p) => t >= p.start && t < p.end);
+    host.dataset.phase = phase?.voice || "";
     let sounding = false;
-    if (phase === "reference") {
-      const ms = range.reference[0] + t * 1000;
-      sounding = ms >= focus.referenceStart && ms < focus.referenceEnd;
-    } else if (phase === "take") {
-      const ms = range.take[0] + (t - wave.takeStart) * 1000;
-      sounding = ms >= focus.start && ms < focus.end;
+    if (phase) {
+      const focus = phase.attempt
+        ? phase.attempt.units?.find((u) => u.first === units[selected].first)
+        : units[selected];
+      if (focus?.reliable) {
+        const time = phase.origin + (t - phase.start) * 1000;
+        const demo = phase.voice === "reference";
+        sounding =
+          time >= (demo ? focus.referenceStart : focus.start) &&
+          time < (demo ? focus.referenceEnd : focus.end);
+      }
     }
     host.toggleAttribute("data-sounding", sounding);
   }
@@ -67,7 +70,7 @@ export function createExcerptPlayer(
     active = false;
     clearInterval(timer);
     audio?.pause();
-    button.textContent = "播放片段";
+    button.textContent = attempts.length ? "连听三遍" : "播放片段";
     showPhase();
   }
   function discard() {
@@ -79,18 +82,19 @@ export function createExcerptPlayer(
     URL.revokeObjectURL(url);
     audio = wave = url = null;
   }
-  function showError() {
-    error.textContent =
-      "这段暂时无法播放。可以点「播放片段」重试，或在上方回听整句。";
+  function showError(auto = false) {
+    error.textContent = auto
+      ? "片段已录好，点「连听三遍」开始播放。"
+      : "这段暂时无法播放，请再点一次播放按钮。";
     error.hidden = false;
   }
-  function play() {
+  function play(auto = false) {
     beforePlay();
     const id = ++playId;
     error.hidden = true;
     try {
       if (!audio) {
-        wave = excerptWave(samples, range);
+        wave = excerptWave(samples, range, attempts);
         audio = new Audio();
         url = URL.createObjectURL(wave.blob);
         audio.src = url;
@@ -99,7 +103,7 @@ export function createExcerptPlayer(
         };
         audio.onerror = () => {
           discard();
-          showError();
+          showError(auto);
         };
       }
       audio.preservesPitch = true;
@@ -114,12 +118,93 @@ export function createExcerptPlayer(
       audio.play().catch(() => {
         if (id === playId) {
           discard();
-          showError();
+          showError(auto);
         }
       });
     } catch {
       discard();
-      showError();
+      showError(auto);
+    }
+  }
+  function showAttempts() {
+    attempts = history.get(key) || [];
+    el("[data-middle]").hidden = !attempts.length;
+    el('[data-voice="previous"]').textContent =
+      attempts.length === 1 ? "上一遍（整句中）" : "上一遍";
+    el('[data-voice="take"]').textContent = attempts.length
+      ? "这一遍"
+      : "我的录音";
+    button.textContent = attempts.length ? "连听三遍" : "播放片段";
+    comparison.hidden = !attempts.length;
+    if (!attempts.length) return;
+    const focus = units[selected],
+      match = (a) => a?.units?.find((u) => u.first === focus.first);
+    const current = attempts.at(-1);
+    const now = match(current),
+      previous = attempts.length === 2 ? match(attempts[0]) : focus;
+    if (!now?.reliable || !previous?.reliable) {
+      const guidance = {
+        quiet: "这遍声音太轻，靠近麦克风再试。",
+        noise: "这遍背景声较强，换个安静的位置再试。",
+        closure: "单听「っ」很难量出停顿。带上前后拍再练，会更容易听清。",
+      };
+      comparison.textContent =
+        guidance[current.reason] ||
+        "有一遍的目标拍边界不够清楚，可以连听三遍，凭听感比较。";
+      return;
+    }
+    const difference =
+      Math.abs(previous.userMs - focus.refMs) -
+      Math.abs(now.userMs - focus.refMs);
+    const direction =
+      difference > 30
+        ? "这遍的拍长更接近示范。"
+        : difference < -30
+          ? "这遍和示范的时长差更大，可以再听一次。"
+          : "两遍与示范的时长差别相近。";
+    const ms = (n) => Math.round(n / 10) * 10;
+    comparison.textContent =
+      "「" +
+      focus.labels.join("・") +
+      "」按原速估计，示范约 " +
+      ms(focus.refMs) +
+      "、上一遍 " +
+      ms(previous.userMs) +
+      "、这一遍 " +
+      ms(now.userMs) +
+      " 毫秒。" +
+      direction;
+  }
+  function selection() {
+    if (selected === null) return null;
+    return {
+      key,
+      index: selected,
+      reference: range.reference,
+      first: units[range.from].first,
+      last: units[range.to].first,
+      text: units
+        .slice(range.from, range.to + 1)
+        .flatMap((u) => u.labels)
+        .join("・"),
+    };
+  }
+  function captureState(state, part, supported) {
+    const recording = part && state === "recording",
+      busy = state !== "idle";
+    partButton.disabled = !supported || (busy && !recording);
+    partButton.textContent = recording ? "结束片段录音" : "只重读这段";
+    button.disabled = scope.disabled = rate.disabled = loop.disabled = busy;
+    captureStatus.hidden = !part || !busy;
+    if (part && busy) {
+      error.hidden = true;
+      const text =
+        state === "request"
+          ? "正在请求麦克风…"
+          : recording
+            ? "只读「" + part.text + "」。读完点「结束片段录音」。"
+            : "正在准备三遍对照…";
+      if (text !== captureStatus.textContent) captureStatus.textContent = text;
     }
   }
   function display(index) {
@@ -128,9 +213,12 @@ export function createExcerptPlayer(
     discard();
     selected = index;
     range = next;
+    key = range.from + "-" + range.to;
+    showAttempts();
     error.hidden = true;
     host.hidden = false;
     el(".excerpt-transport").append(retryButton);
+    retryButton.textContent = "回到整句重读";
     const first = units[range.from],
       last = units[range.to];
     const start = first.first + 1,
@@ -177,7 +265,23 @@ export function createExcerptPlayer(
       if (autoplay) play();
       if (focus) button.focus();
     },
+    selection,
+    captureState,
+    recordError(message) {
+      error.textContent = message;
+      error.hidden = false;
+    },
+    addAttempt(part, attempt) {
+      if (key !== part.key) return;
+      discard();
+      history.set(key, [...attempts.slice(-1), attempt]);
+      showAttempts();
+      play(true);
+    },
     stop,
-    destroy: discard,
+    destroy() {
+      discard();
+      history.clear();
+    },
   };
 }

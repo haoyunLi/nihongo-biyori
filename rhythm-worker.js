@@ -1,4 +1,9 @@
-import { makeGroups, measure, compareAlignment } from "./rhythm-align.js?v=7";
+import {
+  makeGroups,
+  measure,
+  compareAlignment,
+  comparePart,
+} from "./rhythm-align.js?v=8";
 
 async function asset(name, format) {
   const r = await fetch(new URL("./assets/timing/" + name, import.meta.url));
@@ -27,12 +32,22 @@ self.onmessage = async ({ data }) => {
       result = { status: "uncertain", reason: "reference" };
     else {
       const groups = makeGroups(plans[data.stem], data.reading);
-      reference ??= measure(data.reference, groups, model);
-      result = compareAlignment(
-        reference,
-        measure(data.take, groups, model),
-        data.slow,
-      );
+      if (data.part) {
+        result = comparePart(
+          data.reference,
+          data.take,
+          groups,
+          data.part,
+          model,
+        );
+      } else {
+        reference ??= measure(data.reference, groups, model);
+        result = compareAlignment(
+          reference,
+          measure(data.take, groups, model),
+          data.slow,
+        );
+      }
     }
   } catch {
     result = { status: "uncertain", reason: "unavailable" };

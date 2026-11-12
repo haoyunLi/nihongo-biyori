@@ -98,6 +98,7 @@ export function renderFeedback(parent, result, last) {
     comparison(parent, last, result);
     return;
   }
+  append(parent, "p", "整句录音反馈", "whole-feedback-label");
   const unit = result.units[result.target];
   if (unit) {
     const short = unit.ratio < 1;

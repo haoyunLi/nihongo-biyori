@@ -28,7 +28,7 @@ export function excerptWindow(units, index, context = true) {
   };
 }
 
-function cut(pcm, [start, end]) {
+export function cut(pcm, [start, end]) {
   if (!Number.isFinite(start) || !Number.isFinite(end))
     throw new Error("Invalid excerpt boundary");
   const frame = (ms) =>
@@ -38,14 +38,43 @@ function cut(pcm, [start, end]) {
   return slice;
 }
 
-// A single local WAV gives the native player one seekable, pitch-preserving
-// A/B loop. The silence between speakers and before repeating is intentional.
-export function excerptWave(samples, range) {
-  const reference = cut(samples.reference, range.reference);
-  const take = cut(samples.take, range.take);
+// Local takes are kept per exact range. The first comparison borrows the
+// matching portion of the full recording, subsequent ones use the last two takes.
+export function excerptWave(samples, range, attempts = []) {
+  const tracks = [
+    { voice: "reference", pcm: samples.reference, bounds: range.reference },
+  ];
+  const recent = attempts.slice(-2);
+  if (recent.length < 2)
+    tracks.push({
+      voice: recent.length ? "previous" : "take",
+      pcm: samples.take,
+      bounds: range.take,
+    });
+  for (const [i, attempt] of recent.entries()) {
+    tracks.push({
+      voice: i === recent.length - 1 ? "take" : "previous",
+      pcm: attempt.pcm,
+      bounds: attempt.bounds,
+      attempt,
+    });
+  }
   const gap = Math.round(0.3 * sampleRate);
-  const takeOffset = reference.length + gap;
-  const frames = takeOffset + take.length + gap;
+  let frames = 0;
+  const phases = tracks.map(({ voice, pcm, bounds, attempt }) => {
+    const audio = cut(pcm, bounds),
+      offset = frames;
+    frames += audio.length + gap;
+    return {
+      voice,
+      audio,
+      offset,
+      start: offset / sampleRate,
+      end: (offset + audio.length) / sampleRate,
+      origin: bounds[0],
+      attempt,
+    };
+  });
   const bytes = new ArrayBuffer(44 + frames * 2);
   const view = new DataView(bytes);
   function fourCC(offset, text) {
@@ -76,12 +105,13 @@ export function excerptWave(samples, range) {
       );
     }
   }
-  write(reference, 0);
-  write(take, takeOffset);
+  for (const part of phases) write(part.audio, part.offset);
+  const take = phases.at(-1);
   return {
     blob: new Blob([bytes], { type: "audio/wav" }),
-    referenceEnd: reference.length / sampleRate,
-    takeStart: takeOffset / sampleRate,
-    takeEnd: (takeOffset + take.length) / sampleRate,
+    phases,
+    referenceEnd: phases[0].end,
+    takeStart: take.start,
+    takeEnd: take.end,
   };
 }
