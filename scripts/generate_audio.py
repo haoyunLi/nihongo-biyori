@@ -138,11 +138,31 @@ def neural_take(synth, spoken, style, isolated):
         return np.frombuffer(w.readframes(w.getnframes()), dtype="<i2").astype(float)/32768, w.getframerate()
 
 
+def build_contrasts(synth):
+    js = """import {contrasts} from './contrast-data.js';
+    console.log(JSON.stringify(contrasts.flatMap(p=>p.items).filter(w=>w.spoken)))"""
+    command = ["node", "--no-warnings", "--experimental-default-type=module",
+               "--input-type=module", "-e", js]
+    catalog = {}
+    for item in json.loads(subprocess.check_output(command, cwd=ROOT)):
+        # Even a word with an existing human recording needs the paired voice
+        # here so the listener cannot identify its meaning by the speaker.
+        stem = hashlib.sha256(("contrast:" + item["spoken"]).encode()).hexdigest()[:16]
+        samples, rate = neural_take(synth, item["spoken"], 10005, False)
+        encode(samples, rate, DEST / (stem + ".mp3"))
+        catalog[item["audio"]] = stem
+    manifest = "export const contrastClips = " + json.dumps(catalog, ensure_ascii=False, indent=2) + ";\n"
+    (DEST / "contrasts.js").write_text(manifest, encoding="utf-8")
+
+
 def build(args):
     synth = Synthesizer(Onnxruntime.load_once(filename=str(args.runtime)),
                         OpenJtalk(str(args.dictionary)), cpu_num_threads=3)
     with VoiceModelFile.open(str(args.model)) as model:
         synth.load_voice_model(model)
+    build_contrasts(synth)
+    if args.contrasts_only:
+        return
     source = json.loads((ROOT/"scripts/kana-recordings.json").read_text())
     kana_sources = {katakana(h):args.recordings/relative for h,relative in source.items()}
     word_files = json.loads((ROOT/"scripts/word-recordings.json").read_text())
@@ -184,6 +204,11 @@ def build(args):
 
 if __name__ == "__main__":
     parser=argparse.ArgumentParser(description=__doc__)
-    for flag in ["runtime","dictionary","model","recordings"]:
+    parser.add_argument("--contrasts-only", action="store_true")
+    parser.add_argument("--recordings", type=Path)
+    for flag in ["runtime","dictionary","model"]:
         parser.add_argument("--"+flag,type=Path,required=True)
-    build(parser.parse_args())
+    args = parser.parse_args()
+    if not args.contrasts_only and args.recordings is None:
+        parser.error("--recordings is required for a full rebuild")
+    build(args)

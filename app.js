@@ -1,5 +1,14 @@
+import { createRecorder, recordingButton } from "./recording.js";
+import { contrastById } from "./contrast-data.js";
+import {
+  contrastView,
+  contrastURL,
+  handleContrast,
+  stopContrast,
+  leaveContrast,
+} from "./contrast-view.js";
 import { lessons, references } from "./lessons.js";
-import { createPractice } from "./practice.js";
+import { createPractice } from "./practice.js?v=5";
 import { sceneById } from "./scenes.js";
 import { kanaRows, kanaNotes, extraKana } from "./kana.js";
 import { strokes } from "./strokes.js?v=3";
@@ -11,8 +20,8 @@ import {
   handleGuide,
   changeGuideRow,
   stopGuidePlayback,
-} from "./guide-view.js?v=4";
-import { speak, stopAudio } from "./audio.js?v=3";
+} from "./guide-view.js?v=5";
+import { speak, stopAudio } from "./audio.js?v=5";
 
 const tracks = [
   {
@@ -131,7 +140,16 @@ function save() {
   }
 }
 const main = document.querySelector("main");
+const recordButton = (options) => recordingButton(esc, options);
+const mic = createRecorder({
+  speak,
+  stopAudio,
+  silence,
+  slow: () => state.slow,
+  notify,
+});
 const practice = createPractice({
+  recordButton,
   state,
   examples,
   soundButton,
@@ -166,6 +184,7 @@ let audioEpoch = 0,
 function silence() {
   audioEpoch++;
   sequence = false;
+  stopContrast();
   stopGuidePlayback();
   stopAudio();
   audioButton?.classList.remove("speaking");
@@ -423,6 +442,13 @@ function row(item, key, dialogue = false) {
       item.kana,
       dialogue && item.who.startsWith("你"),
     ) +
+    recordButton({
+      jp: item.jp,
+      kana: item.kana,
+      zh: item.zh,
+      learner: dialogue && item.who.startsWith("你"),
+      compact: true,
+    }) +
     starButton(key) +
     "</div></div>"
   );
@@ -675,7 +701,7 @@ function readerStage(l) {
         ic("play") +
         " 连续播放</button>";
     content =
-      "<h2>情景对话</h2><p>先听完整对话，再点「我来接话」，根据中文提示说出自己的台词。</p>" +
+      "<h2>情景对话</h2><p>先听完整对话，再点「我来接话」，根据中文提示说出自己的台词。点麦克风可以录下这一句，与示范对照。</p>" +
       controls() +
       '<div class="toolbar">' +
       fullPlay +
@@ -695,6 +721,19 @@ function readerStage(l) {
       ? '<div class="lesson-row-links"><a class="text-link" href="#practice/scene/' +
         l.id +
         '">自己拼一句，练习这个情景 →</a></div>'
+      : "") +
+    ((l.id === "f07" && n <= 2) ||
+    (l.id === "f08" && n === 1) ||
+    (l.id === "f06" && n === 0)
+      ? '<p class="lesson-row-links"><a class="text-link" href="' +
+        contrastURL(
+          l.id === "f08"
+            ? "biru"
+            : l.id === "f06"
+              ? "kaga"
+              : ["byouin", "kitte", "obasan"][n],
+        ) +
+        '">听两种读法，试一轮盲听 →</a></p>'
       : "") +
     lessonGuideLinks(l.id, n) +
     '<div class="stage-footer">' +
@@ -852,7 +891,7 @@ function kanaView() {
     basicDone +
     " / " +
     kanaRows.length +
-    ' 组 · 含拨音ん</small> · <a class="text-link" href="#practice/daily">今日混合复习</a></div><a class="btn primary" href="' +
+    ' 组 · 含拨音ん</small> · <a class="text-link" href="#practice/daily">今日混合复习</a> · <a class="text-link" href="#practice/sounds">相近音听辨</a></div><a class="btn primary" href="' +
     (resume
       ? state.kanaBookmark
       : guideURL(next.id, "listen", session.kanaType)) +
@@ -1060,6 +1099,7 @@ function about() {
 }
 let guideOrigin = null;
 const guideContext = {
+  recordButton,
   flagMiss: practice.flagMiss,
   returnLink: () =>
     guideOrigin
@@ -1088,13 +1128,19 @@ function go() {
     return;
   }
   silence();
+  mic.close();
   const [raw, arg, num, script] = location.hash.slice(1).split("/");
   route = raw || "home";
+  if (route !== "practice" || arg !== "sounds") leaveContrast();
   if (route !== "practice" || arg !== "daily") practice.leaveDaily();
   if (
     route === "practice" &&
     arg &&
-    !(arg === "daily" || (arg === "scene" && sceneById.has(num)))
+    !(
+      arg === "daily" ||
+      (arg === "sounds" && (!num || contrastById.has(num))) ||
+      (arg === "scene" && sceneById.has(num))
+    )
   )
     route = "missing";
   if (route === "lesson" && !lessonById.has(arg)) route = "missing";
@@ -1142,7 +1188,10 @@ function go() {
     courses: courseView,
     kana: () => (arg ? guideView(arg, num, script, guideContext) : kanaView()),
     lesson: () => lessonView(currentLesson),
-    practice: () => practice.view(arg, num),
+    practice: () =>
+      arg === "sounds"
+        ? contrastView(num, guideContext)
+        : practice.view(arg, num),
     review: reviewView,
     about,
   };
@@ -1165,7 +1214,7 @@ function go() {
           ? guideById.get(arg).title + " · 逐行跟练"
           : "五十音图",
       review: "复习手帖",
-      practice: practice.title(arg, num),
+      practice: arg === "sounds" ? "相近音听辨" : practice.title(arg, num),
       about: "教材与素材来源",
     }[route] ||
     "页面未找到";
@@ -1231,6 +1280,11 @@ function updateKana(button, changeScript) {
   else window.scrollTo({ top: oldTop, behavior: "instant" });
 }
 main.addEventListener("change", (e) => {
+  if (
+    e.target.matches("[data-contrast-select]") &&
+    contrastById.has(e.target.value)
+  )
+    location.hash = contrastURL(e.target.value);
   if (e.target.matches("[data-guide-select]")) changeGuideRow(e.target.value);
 });
 main.addEventListener("submit", (e) => {
@@ -1243,6 +1297,14 @@ main.addEventListener("click", (e) => {
   const button = e.target.closest("button[data-action]");
   if (!button) return;
   const { action, key } = button.dataset;
+  if (action === "record-open") {
+    mic.open(button);
+    return;
+  }
+  if (action.startsWith("contrast-")) {
+    handleContrast(button, guideContext);
+    return;
+  }
   if (action.startsWith("recall-") || action.startsWith("scene-")) {
     practice.handle(button);
     return;

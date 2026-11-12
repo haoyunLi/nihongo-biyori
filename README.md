@@ -20,12 +20,16 @@
 
 [情景接话](https://haoyunli.github.io/nihongo-biyori/#practice) 提供车站、食堂、购物及动漫交流等六个场景。听完对方的话，再用语块组成自己的回答。食堂和展会售票场景可选择不同的回应目标，完成后可听示范并收藏想再练的句子。
 
+[相近音听辨](https://haoyunli.github.io/nihongo-biyori/#practice/sounds) 用七组同声线对照练习清浊音、辅音起音、长音、促音、拨音与拗音。每组先看拍数并试听，再做四题盲听。听错的读音会进入今日复习。
+
+在例句、情景对话、假名和情景词旁点麦克风，即可先听示范，再录下最多 15 秒自己的跟读并依次回放。录音只在本机内存中保留到关闭录音窗口，麦克风权限由浏览器管理。
+
 ## 本地预览
 
-在仓库根目录运行以下命令，然后打开浏览器访问终端显示的地址。
+在仓库根目录用 Python 3.11 或更高版本运行以下命令，然后打开浏览器访问终端显示的地址。
 
 ```sh
-python3 -m http.server 8000
+python3 -m http.server 8000 --protocol HTTP/1.1
 ```
 
 本项目使用原生 HTML、CSS 和 JavaScript 模块。GitHub Pages 从 main 分支根目录发布。课程内容和参考教材在 [lessons.js](./lessons.js)，音频生成过程见 [生成脚本](./scripts/generate_audio.py)。

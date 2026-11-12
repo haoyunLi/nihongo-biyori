@@ -14,6 +14,8 @@
 
 其他情景词、句子和学习者的示范回应使用 **VOICEVOX Nemo** 在本地合成。使用合成音频时请保留 VOICEVOX Nemo 署名，并遵守其使用条款。[官方说明与条款](https://voicevox.hiroshiba.jp/nemo/term/) · [官方声库](https://github.com/VOICEVOX/voicevox_vvm)
 
+在相近音练习中，「ビル／ビール」「病院／美容院」和「記念／禁煙」使用同一 VOICEVOX Nemo 女声 1 专门合成，便于在一致的音色与语速下比较。课程原有的「病院」真人词汇示范继续用于原课。其余对照组复用各自同一声线的已有录音。发音学习延伸阅读见[东京外国语大学的拗音教学](https://www.coelang.tufs.ac.jp/mt/ja/pmod/practical/01-11-01.php)。
+
 ## 重新生成
 
 给生成脚本的 `--recordings` 目录准备三组输入。将上述固定版 Kana Trainer 的 `data/audio/` 放入 `audio/`，将 Tofugu／WaniKani 仓库对应的 `lib/mp3/` 放入同名目录，另将青的原始 Ogg 放入 `commons/Ja-ao-blue.ogg`。两个 JSON 对照表都使用相对于这个目录的路径。用 `scripts/generate_audio.py --help` 可查看引擎及字典参数。

@@ -1621,3 +1621,185 @@ footer > div {
   width: 46px;
   height: 46px;
 }
+
+.sound-entry,
+.record-header,
+.contrast-picker {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+}
+.sound-entry {
+  margin: 20px 0;
+  padding: 18px 0;
+  border-block: 1px solid var(--line);
+}
+.sound-entry h2 {
+  font-size: clamp(21px, 2vw, 28px);
+  margin-bottom: 5px;
+}
+.sound-entry p,
+.record-note {
+  color: var(--muted);
+}
+.sound-entry .btn {
+  flex: none;
+}
+.contrast-picker {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.contrast-picker select {
+  font: inherit;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px 9px;
+  max-width: 100%;
+}
+.contrast-words {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+.contrast-word {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.contrast-word.audible {
+  border-color: var(--red);
+  background: #f6e7da;
+}
+.contrast-word .record-link {
+  margin-top: 6px;
+}
+.contrast-status,
+.record-status {
+  color: var(--sage);
+  font-weight: 600;
+  min-height: 1.6em;
+  margin-top: 10px;
+}
+.contrast-tip {
+  margin-top: 8px;
+  border-left: 3px solid var(--sage);
+  padding: 7px 12px;
+  background: #e7eee46b;
+}
+.mic-icon {
+  border: 0;
+  border-radius: 50%;
+  padding: 6px;
+  color: var(--sage);
+  display: inline-grid;
+  place-items: center;
+  min-width: 30px;
+  min-height: 32px;
+}
+.mic-icon:hover {
+  background: #e7eee4;
+}
+.record-panel {
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid #9e9280;
+  border-radius: 8px;
+  width: min(520px, calc(100vw - 28px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  padding: clamp(18px, 3.5vw, 30px);
+  box-shadow: 0 12px 45px #23221830;
+}
+.record-panel::backdrop {
+  background: #28292080;
+}
+.record-header h2 {
+  font-size: clamp(23px, 3vw, 31px);
+}
+.record-panel .reference-line {
+  border-left: 3px solid var(--red);
+  background: #eee7db80;
+  margin: 16px 0;
+  padding: 10px 14px;
+  overflow-wrap: anywhere;
+}
+.record-panel .reference-line strong {
+  font-size: clamp(25px, 3vw, 34px);
+}
+.record-panel .actions {
+  margin: 13px 0;
+}
+.record-panel .take-controls {
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+.record-panel button {
+  color: var(--ink);
+}
+.record-panel .primary {
+  color: #fff;
+}
+.record-time {
+  font-variant-numeric: tabular-nums;
+  color: var(--red);
+}
+.record-note {
+  font-size: 13px;
+  margin-top: 8px;
+}
+@media (max-width: 650px) {
+  .contrast-words {
+    gap: 7px;
+  }
+  .contrast-word {
+    padding: 9px;
+  }
+  .contrast-word .word-beats {
+    gap: 3px;
+  }
+  .contrast-word .word-beats span {
+    font-size: 18px;
+    min-width: 24px;
+    padding: 2px 4px;
+  }
+  .contrast-word .model-line strong {
+    font-size: 21px;
+  }
+  .sound-entry {
+    flex-wrap: wrap;
+  }
+  .example,
+  .line-row {
+    gap: 7px;
+  }
+}
+@media (max-width: 380px) {
+  .contrast-words {
+    grid-template-columns: 1fr;
+  }
+  .mini-actions {
+    gap: 0;
+  }
+  .mic-icon {
+    min-width: 26px;
+    padding: 4px;
+  }
+}
+.contrast-status:empty {
+  min-height: 0;
+  margin: 0;
+}
+@media (min-width: 381px) and (max-width: 650px) {
+  .contrast-words .word-beats {
+    gap: 2px;
+  }
+  .contrast-words .word-beats span {
+    min-width: 0;
+    padding: 2px 3px;
+    font-size: 17px;
+  }
+}

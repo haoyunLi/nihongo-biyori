@@ -1,7 +1,7 @@
 import { guideById, kanaGuides } from "./kana-guides.js";
 import { kanaNotes } from "./kana.js";
 import { strokes } from "./strokes.js?v=3";
-import { speak } from "./audio.js?v=3";
+import { speak } from "./audio.js?v=5";
 import { humanKana, humanWords } from "./assets/audio/catalog.js?v=3";
 
 const stages = [
@@ -216,6 +216,7 @@ function selectedLetter(ctx) {
     '<span class="reading">' +
     (human.has(item.kata) ? "真人示范" : "合成示范") +
     "</span>" +
+    ctx.recordButton({ jp: c, tip: note, compact: true }) +
     toggle("重播笔顺", "guide-draw") +
     toggle("逐笔看", "guide-stroke") +
     '</div><small class="stroke-count" role="status"></small></div>'
@@ -311,6 +312,15 @@ function currentWord(ctx) {
     (recordedWords.has(w.jp) ? "真人词汇示范" : "日语合成示范") +
     "</span>" +
     playbackButton("听一句，跟一句", "guide-shadow-word") +
+    ctx.recordButton({
+      jp: w.jp,
+      kana: w.beats.join(""),
+      zh: w.zh,
+      tip:
+        "边听边敲 " +
+        w.beats.length +
+        " 拍。再录一遍，回听自己在哪一拍变换了口形。",
+    }) +
     speed(ctx) +
     '</div><p class="guide-status" role="status"></p>'
   );

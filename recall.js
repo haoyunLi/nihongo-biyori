@@ -1,3 +1,4 @@
+import { contrasts } from "./contrast-data.js";
 import { kanaGuides } from "./kana-guides.js";
 import { lessons } from "./lessons.js";
 
@@ -20,6 +21,25 @@ function register(card) {
   return card.id;
 }
 
+for (const pair of contrasts) {
+  pair.items.forEach((v, i) =>
+    register({
+      id: "contrast:" + pair.id + ":" + i,
+      kind: "mistake",
+      pair: true,
+      label: pair.title,
+      source: "#practice/sounds/" + pair.id,
+      signature: "contrast:" + pair.id + ":" + i,
+      q: {
+        prompt: "听两种读法，这段示范对应哪一个？",
+        listen: v.audio,
+        options: pair.items.map((w) => w.jp + " · " + w.zh),
+        answer: i,
+        why: v.beats.join("・") + "，共 " + v.beats.length + " 拍。" + pair.cue,
+      },
+    }),
+  );
+}
 for (const group of kanaGuides) {
   for (const word of group.words)
     register({
@@ -109,7 +129,7 @@ function eligible(state, history) {
   ].map((list) => list.filter((id) => recallCards.has(id)));
   const learningSounds = Object.keys(history).filter((id) => {
     const kind = recallCards.get(id)?.kind;
-    return kind === "kana" || kind === "word";
+    return kind === "kana" || kind === "word" || recallCards.get(id)?.pair;
   });
   const vowels = byRow.get("a");
   const warmup =

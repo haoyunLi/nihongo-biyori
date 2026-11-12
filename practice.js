@@ -11,7 +11,7 @@ import {
   recallCards,
   recordRating,
   updateBook,
-} from "./recall.js";
+} from "./recall.js?v=5";
 import { scenes, sceneById, chunkReading } from "./scenes.js";
 
 const catalog = new Map();
@@ -61,7 +61,7 @@ export function createPractice(ctx) {
           (id) => round.first[id] === "again" && !round.retry[id],
         ).length +
         " 张";
-    return `<div class="practice-entry"><div><h2>练习室</h2><p>${note} · 自己回想，再听示范</p></div><div class="actions"><a class="btn" href="#practice/daily">今日复习</a><a class="btn" href="#practice">情景接话</a></div></div>`;
+    return `<div class="practice-entry"><div><h2>练习室</h2><p>${note} · 自己回想，再听示范</p></div><div class="actions"><a class="btn" href="#practice/daily">今日复习</a><a class="btn" href="#practice/sounds">相近音听辨</a><a class="btn" href="#practice">情景接话</a></div></div>`;
   }
   function hub() {
     const { round, pending, plan } = snap();
@@ -75,7 +75,7 @@ export function createPractice(ctx) {
         "下一次复习在 " +
         dayLabel(plan.nextDue) +
         "。现在可以选一个场景练接话。";
-    return `<div class="inner narrow"><h1>练习室</h1><section class="practice-feature"><h2>今日复习</h2><p>${desc}</p><a class="btn primary" href="#practice/daily">${pending ? "进入复习 · " + round.ids.length + " 张" : "查看复习安排"} →</a></section><div class="section-head"><h2>情景接话</h2></div><p class="scene-intro">选一个你想去的地方。听对方说话，再用打乱的日语语块拼出自己的回应。</p><div class="scene-list">${sceneList()}</div></div>`;
+    return `<div class="inner narrow"><h1>练习室</h1><section class="practice-feature"><h2>今日复习</h2><p>${desc}</p><a class="btn primary" href="#practice/daily">${pending ? "进入复习 · " + round.ids.length + " 张" : "查看复习安排"} →</a></section><div class="sound-entry"><div><h2>相近音听辨</h2><p>听「来て」和「切手」，辨别中间多出的一拍，再录下自己的说法核对。</p></div><a class="btn" href="#practice/sounds">进入听辨 →</a></div><div class="section-head"><h2>情景接话</h2></div><p class="scene-intro">选一个你想去的地方。听对方说话，再用打乱的日语语块拼出自己的回应。</p><div class="scene-list">${sceneList()}</div></div>`;
   }
   function crumbs(current) {
     return `<div class="crumb"><a href="#practice">练习室</a><span aria-hidden="true">›</span>${current}</div>`;
@@ -181,7 +181,9 @@ export function createPractice(ctx) {
       phase === "retry"
         ? "刚才没记牢，再来一次"
         : card.kind === "mistake"
-          ? "来自错题本"
+          ? card.pair
+            ? "相近音复听"
+            : "来自错题本"
           : card.kind === "say"
             ? "表达回想"
             : card.kind === "word"
@@ -262,7 +264,7 @@ export function createPractice(ctx) {
   }
   function model(scene, jp, save = false) {
     const { key, item } = word(scene, jp);
-    return `<div class="recall-model"><div class="model-line"><strong lang="ja">${ctx.esc(jp)}</strong>${ctx.soundButton(jp, "听日语示范", item.kana)}${save ? ctx.starButton(key) : ""}</div><p class="reading"><span lang="ja">${ctx.esc(item.kana)}</span> · ${ctx.esc(item.romaji)}</p><p>${ctx.esc(item.zh)}</p></div>`;
+    return `<div class="recall-model"><div class="model-line"><strong lang="ja">${ctx.esc(jp)}</strong>${ctx.soundButton(jp, "听日语示范", item.kana)}${ctx.recordButton({ jp, kana: item.kana, zh: item.zh, compact: true })}${save ? ctx.starButton(key) : ""}</div><p class="reading"><span lang="ja">${ctx.esc(item.kana)}</span> · ${ctx.esc(item.romaji)}</p><p>${ctx.esc(item.zh)}</p></div>`;
   }
   function sceneView(scene) {
     if (!session || session.id !== scene.id) {
