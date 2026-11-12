@@ -1,4 +1,4 @@
-import { createRecorder, recordingButton } from "./recording.js";
+import { createRecorder, recordingButton } from "./recording.js?v=6";
 import { contrastById } from "./contrast-data.js";
 import {
   contrastView,
@@ -1094,7 +1094,7 @@ function about() {
           "</p></article>",
       )
       .join("") +
-    '</div><div class="section-head"><h2>笔顺、语音与插画</h2></div><div class="bibliography"><article><h3>假名笔顺</h3><p>笔画数据取自 Ulrich Apel 的 <a href="https://kanjivg.tagaini.net/">KanjiVG</a>。本站提取了基本假名、浊音和小假名的笔画路径并制作逐笔动画，衍生路径沿用 <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>。</p></article><article><h3>日语朗读</h3><p>五十音跟练中的 104 个音来自 FUN Japanese Learning 的真人示范。部分情景词取自 Tofugu、WaniKani 和 Wikimedia Commons 的真人词汇录音，其余表达使用 VOICEVOX Nemo 日语配音。</p><p><a href="https://github.com/haoyunLi/nihongo-biyori/blob/main/assets/audio/CREDITS.md">语音来源与许可 ↗</a></p></article><article><h3>视觉素材</h3><p>海滨电车与三幅课程封面为本站生成的原创插画。中文标题使用 Noto Serif SC 的嵌入子集。<a href="./assets/fonts/OFL.txt">字体许可</a></p></article></div></div>'
+    '</div><div class="section-head"><h2>笔顺、语音与插画</h2></div><div class="bibliography"><article><h3>假名笔顺</h3><p>笔画数据取自 Ulrich Apel 的 <a href="https://kanjivg.tagaini.net/">KanjiVG</a>。本站提取了基本假名、浊音和小假名的笔画路径并制作逐笔动画，衍生路径沿用 <a href="https://creativecommons.org/licenses/by-sa/3.0/">CC BY-SA 3.0</a>。</p></article><article><h3>日语朗读</h3><p>五十音跟练中的 104 个音来自 FUN Japanese Learning 的真人示范。部分情景词取自 Tofugu、WaniKani 和 Wikimedia Commons 的真人词汇录音，其余表达使用 VOICEVOX Nemo 日语配音。</p><p><a href="https://github.com/haoyunLi/nihongo-biyori/blob/main/assets/audio/CREDITS.md">语音来源与许可 ↗</a></p></article><article><h3>跟读节奏分析</h3><p>网页使用 Julius Dictation Kit 的日语声学模型在本机估计各拍的时长。模型由京都大学河原研究室和名古屋工业大学李研究室提供。</p><p><a href="https://github.com/haoyunLi/nihongo-biyori/blob/main/assets/timing/NOTICE.md">声学模型来源与许可 ↗</a></p></article><article><h3>视觉素材</h3><p>海滨电车与三幅课程封面为本站生成的原创插画。中文标题使用 Noto Serif SC 的嵌入子集。<a href="./assets/fonts/OFL.txt">字体许可</a></p></article></div></div>'
   );
 }
 let guideOrigin = null;

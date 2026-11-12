@@ -1803,3 +1803,53 @@ footer > div {
     font-size: 17px;
   }
 }
+
+.record-panel [hidden] {
+  display: none;
+}
+.rhythm-feedback {
+  border-top: 2px solid #58715c;
+  margin: 16px 0;
+  padding: 14px 14px 12px;
+  background: #edf0e8;
+  border-radius: 3px;
+  overflow-wrap: anywhere;
+}
+.rhythm-feedback h3 {
+  font-size: 19px;
+  line-height: 1.45;
+  margin: 0 0 6px;
+}
+.rhythm-feedback p {
+  margin: 6px 0;
+}
+.rhythm-feedback .rhythm-estimate,
+.rhythm-feedback details {
+  font-size: 14px;
+}
+.rhythm-feedback summary {
+  cursor: pointer;
+  padding: 7px 0;
+}
+.rhythm-feedback table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.rhythm-feedback th,
+.rhythm-feedback td {
+  border-bottom: 1px solid var(--line);
+  padding: 5px 3px;
+  text-align: left;
+}
+.rhythm-focus {
+  background: #f6e2cc;
+}
+.rhythm-change {
+  border-left: 3px solid #58715c;
+  padding-left: 9px;
+}
+.rhythm-retry {
+  margin-top: 8px;
+}

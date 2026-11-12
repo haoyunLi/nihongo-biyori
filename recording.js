@@ -1,3 +1,6 @@
+import { createTimingSession } from "./rhythm-client.js";
+import { renderFeedback } from "./rhythm-feedback.js";
+
 // Only a user gesture inside the open panel starts microphone capture.
 const micIcon =
   '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="2" width="6" height="13" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4m-4 0h8"/></svg>';
@@ -25,6 +28,11 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
     stream,
     recorder,
     clip = "",
+    previousClip = "",
+    timing,
+    result,
+    previousResult,
+    analysisRound = 0,
     timer,
     launch = 0,
     playback = 0,
@@ -45,6 +53,7 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
 
   function controls() {
     const busy = state !== "idle";
+    el("[data-rhythm]").hidden = busy || !clip;
     el('[data-rec="capture"]').textContent =
       state === "request"
         ? "正在请求麦克风"
@@ -57,9 +66,13 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
               : "开始录音";
     el('[data-rec="capture"]').disabled =
       !supported() || state === "request" || state === "finishing";
-    for (const key of ["reference", "mine", "both"]) {
+    el('[data-rec="retry-rhythm"]').disabled = busy || !supported();
+    el('[data-rec="previous"]').hidden = !previousClip;
+    for (const key of ["reference", "mine", "both", "previous"]) {
       const b = el(`[data-rec="${key}"]`);
-      b.disabled = busy || (key !== "reference" && !clip);
+      b.disabled =
+        busy ||
+        (key === "previous" ? !previousClip : key !== "reference" && !clip);
       b.textContent = listening === key ? "停止播放" : b.dataset.idle;
     }
   }
@@ -87,8 +100,15 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
     }
     stopTracks();
     recorder = null;
+    analysisRound++;
+    timing?.close();
+    timing = null;
+    result = previousResult = null;
     if (clip) URL.revokeObjectURL(clip);
-    clip = "";
+    if (previousClip) URL.revokeObjectURL(previousClip);
+    clip = previousClip = "";
+    el("[data-rhythm]").hidden = true;
+    el("[data-feedback]").replaceChildren();
     target = null;
     state = "idle";
   }
@@ -106,8 +126,10 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
     panel.innerHTML = `<div class="record-header"><h2 id="record-heading">跟读录音对照</h2><button type="button" class="tool" data-rec="close">关闭</button></div>
       <div class="reference-line"><strong lang="ja" data-record-jp></strong><p class="reading" lang="ja" data-record-kana></p><p data-record-zh></p></div>
       <p data-record-tip></p><div class="actions"><button class="tool" data-rec="reference" data-idle="听示范">听示范</button><button class="btn primary" data-rec="capture">开始录音</button><span class="record-time" aria-hidden="true" data-record-time></span></div>
-      <div class="actions take-controls"><button class="tool" data-rec="mine" data-idle="听自己的录音">听自己的录音</button><button class="tool" data-rec="both" data-idle="依次听示范和自己">依次听示范和自己</button></div>
-      <p class="record-status" role="status" data-record-status></p><p class="record-note">录音最长 15 秒，只在本机临时回放，关闭此窗口即清除。</p>`;
+      <div class="actions take-controls"><button class="tool" data-rec="mine" data-idle="听自己的录音">听自己的录音</button><button class="tool" data-rec="both" data-idle="依次听示范和自己">依次听示范和自己</button><button class="tool" data-rec="previous" data-idle="听上一遍" hidden>听上一遍</button></div>
+      <p class="record-status" role="status" data-record-status></p>
+      <section class="rhythm-feedback" aria-label="跟读节奏反馈" data-rhythm hidden><div data-feedback aria-live="polite"></div><button class="tool rhythm-retry" type="button" data-rec="retry-rhythm" hidden>按提示重读</button></section>
+      <p class="record-note">每遍最多 15 秒。录音和节奏分析只在本机进行，关闭窗口即清除。最多可回听最近两遍。</p>`;
     document.body.append(panel);
     panel.addEventListener("cancel", (e) => {
       e.preventDefault();
@@ -122,7 +144,9 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
       else if (key === "capture") {
         if (state === "recording") finishCapture();
         else if (state === "idle") void capture();
-      } else if (["reference", "mine", "both"].includes(key)) void play(key);
+      } else if (key === "retry-rhythm" && state === "idle") void capture();
+      else if (["reference", "mine", "both", "previous"].includes(key))
+        void play(key);
     });
   }
   function open(button) {
@@ -135,6 +159,9 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
     silence();
     trigger = button;
     target = { ...button.dataset };
+    timing = createTimingSession(target);
+    el("[data-rhythm]").hidden = true;
+    el('[data-rec="retry-rhythm"]').hidden = true;
     el("[data-record-jp]").textContent = target.reference;
     el("[data-record-kana]").textContent =
       target.reading !== target.reference ? target.reading : "";
@@ -150,6 +177,25 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
     );
     controls();
     panel.showModal();
+  }
+  async function analyze(blob, slowMode) {
+    const round = ++analysisRound;
+    el("[data-rhythm]").hidden = false;
+    const feedback = el("[data-feedback]");
+    const retry = el('[data-rec="retry-rhythm"]');
+    feedback.textContent = "正在本机比对示范和这遍的节奏…";
+    feedback.setAttribute("aria-busy", "true");
+    retry.hidden = true;
+    const measured = await timing.analyze(blob, slowMode);
+    if (round !== analysisRound || !target) return;
+    result = measured;
+    renderFeedback(feedback, result, previousResult);
+    feedback.setAttribute("aria-busy", "false");
+    retry.hidden = false;
+    retry.textContent = result.units?.[result.target]
+      ? "按提示重读"
+      : "再读一遍";
+    controls();
   }
   function finishCapture() {
     if (state !== "recording") return;
@@ -180,6 +226,7 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
   async function capture() {
     stopListening();
     const ticket = ++launch;
+    const slowMode = slow();
     state = "request";
     controls();
     sayStatus("请在浏览器提示中选择麦克风权限。");
@@ -221,11 +268,16 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
         state = "idle";
         el("[data-record-time]").textContent = "";
         if (chunks.length) {
-          if (clip) URL.revokeObjectURL(clip);
-          clip = URL.createObjectURL(
-            new Blob(chunks, { type: rec.mimeType || chunks[0].type }),
-          );
-          sayStatus("录好了。先听示范，再比较自己的节奏。");
+          if (previousClip) URL.revokeObjectURL(previousClip);
+          previousClip = clip;
+          previousResult = result;
+          result = null;
+          const blob = new Blob(chunks, {
+            type: rec.mimeType || chunks[0].type,
+          });
+          clip = URL.createObjectURL(blob);
+          sayStatus("录好了。可以回听这一遍。");
+          void analyze(blob, slowMode);
         } else sayStatus("没有收到录音，请再试一次。");
         controls();
       };
@@ -259,9 +311,9 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
       controls();
     }
   }
-  function personal() {
+  function personal(url) {
     return new Promise((resolve, reject) => {
-      const a = new Audio(clip);
+      const a = new Audio(url);
       function done(error) {
         a.onended = null;
         a.onerror = null;
@@ -290,7 +342,7 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
     listening = mode;
     controls();
     try {
-      if (mode !== "mine") {
+      if (mode === "reference" || mode === "both") {
         sayStatus("正在播放示范。");
         await speak(
           target.audio,
@@ -302,7 +354,7 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
       if (ticket !== playback) return;
       if (mode !== "reference") {
         sayStatus("正在回放你的录音。");
-        await personal();
+        await personal(mode === "previous" ? previousClip : clip);
       }
       if (ticket === playback) sayStatus("播放结束。");
     } catch (err) {

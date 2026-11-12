@@ -1,0 +1,41 @@
+import { makeGroups, measure, compareAlignment } from "./rhythm-align.js";
+
+async function asset(name, format) {
+  const r = await fetch(new URL("./assets/timing/" + name, import.meta.url));
+  if (!r.ok) throw new Error("model");
+  return r[format]();
+}
+let resources, reference;
+self.onmessage = async ({ data }) => {
+  let result;
+  try {
+    resources ??= Promise.all([
+      asset("plans.json", "json"),
+      asset("model.json", "json"),
+      asset("jnas.f32", "arrayBuffer"),
+    ])
+      .then(([plans, metadata, bytes]) => ({
+        plans,
+        model: { ...metadata, weights: new Float32Array(bytes) },
+      }))
+      .catch((error) => {
+        resources = null;
+        throw error;
+      });
+    const { plans, model } = await resources;
+    if (!plans[data.stem])
+      result = { status: "uncertain", reason: "reference" };
+    else {
+      const groups = makeGroups(plans[data.stem], data.reading);
+      reference ??= measure(data.reference, groups, model);
+      result = compareAlignment(
+        reference,
+        measure(data.take, groups, model),
+        data.slow,
+      );
+    }
+  } catch {
+    result = { status: "uncertain", reason: "unavailable" };
+  }
+  self.postMessage({ id: data.id, result });
+};
