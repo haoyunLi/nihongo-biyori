@@ -1,7 +1,7 @@
 import { guideById, kanaGuides } from "./kana-guides.js";
 import { kanaNotes } from "./kana.js";
 import { strokes } from "./strokes.js?v=3";
-import { speak } from "./audio.js?v=5";
+import { speak } from "./audio.js?v=9";
 import { humanKana, humanWords } from "./assets/audio/catalog.js?v=3";
 
 const stages = [

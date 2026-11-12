@@ -1,3 +1,4 @@
+import { rhythmCard } from "./rhythm-review.js";
 import { contrasts } from "./contrast-data.js";
 import { kanaGuides } from "./kana-guides.js";
 import { lessons } from "./lessons.js";
@@ -129,7 +130,12 @@ function eligible(state, history) {
   ].map((list) => list.filter((id) => recallCards.has(id)));
   const learningSounds = Object.keys(history).filter((id) => {
     const kind = recallCards.get(id)?.kind;
-    return kind === "kana" || kind === "word" || recallCards.get(id)?.pair;
+    return (
+      kind === "kana" ||
+      kind === "word" ||
+      kind === "rhythm" ||
+      recallCards.get(id)?.pair
+    );
   });
   const vowels = byRow.get("a");
   const warmup =
@@ -146,7 +152,10 @@ export function planDay(state, history, day) {
     .filter((id) => history[id] && history[id].due <= day)
     .sort(
       (a, b) =>
-        history[a].due - history[b].due || tieBreak(a, day) - tieBreak(b, day),
+        Number(recallCards.get(b).kind === "rhythm") -
+          Number(recallCards.get(a).kind === "rhythm") ||
+        history[a].due - history[b].due ||
+        tieBreak(a, day) - tieBreak(b, day),
     );
   const fresh = lists.map((items) =>
     items
@@ -198,8 +207,21 @@ export function recordRating(book, day, id, phase, ok) {
     const level = ok
       ? Math.min((book.history[id]?.level || 0) + 1, gaps.length)
       : 0;
-    book.history[id] = { level, due: day + (ok ? gaps[level - 1] : 1) };
+    book.history[id] = {
+      ...(book.history[id]?.rhythm ? { rhythm: book.history[id].rhythm } : {}),
+      level,
+      due: day + (ok ? gaps[level - 1] : 1),
+    };
   }
+  return true;
+}
+
+export function scheduleRhythm(book, entry, day) {
+  const card = rhythmCard(entry);
+  if (!card) return false;
+  register(card);
+  if (book.history[card.id]?.due === day + 1) return false;
+  book.history[card.id] = { rhythm: entry, level: 0, due: day + 1 };
   return true;
 }
 
@@ -265,6 +287,11 @@ export function readBook() {
     const saved = JSON.parse(raw);
     const history = {};
     for (const [id, r] of Object.entries(saved?.history || {})) {
+      if (id.startsWith("rhythm:")) {
+        const card = rhythmCard(r?.rhythm);
+        if (card?.id !== id) continue;
+        register(card);
+      }
       if (
         recallCards.has(id) &&
         Number.isInteger(r?.due) &&

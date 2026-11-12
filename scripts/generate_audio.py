@@ -155,11 +155,39 @@ def build_contrasts(synth):
     (DEST / "contrasts.js").write_text(manifest, encoding="utf-8")
 
 
+def activity_inputs():
+    js = """import {activitySpeech} from './activity-data.js';
+    import {clips,replyClips} from './assets/audio/catalog.js';
+    import {contrastClips} from './assets/audio/contrasts.js';
+    const key=s=>s.normalize("NFKC").split(/\\s+/u).join("");
+    console.log(JSON.stringify(activitySpeech.filter(x=>x.learner
+      ? !replyClips[key(x.jp)] : !(clips[key(x.jp)] || contrastClips[key(x.jp)]))));"""
+    return json.loads(subprocess.check_output(
+        ["node", "--experimental-default-type=module", "-e", js], cwd=ROOT))
+
+
+def build_activities(synth):
+    manifests = {"activityClips": {}, "activityReplies": {}}
+    for item in activity_inputs():
+        style = 10001 if item.get("learner") else 10005
+        spoken = item.get("spoken", item["jp"])
+        stem = hashlib.sha256(f"activity:{style}:{spoken}".encode()).hexdigest()[:16]
+        samples,rate = neural_take(synth,spoken,style,False)
+        encode(samples,rate,DEST/(stem+".mp3"))
+        manifests["activityReplies" if item.get("learner") else "activityClips"][key(item["jp"])] = stem
+    (DEST/"activities.js").write_text("\n".join(
+        "export const "+name+" = "+json.dumps(table,ensure_ascii=False,indent=2)+";"
+        for name,table in manifests.items())+"\n")
+
+
 def build(args):
     synth = Synthesizer(Onnxruntime.load_once(filename=str(args.runtime)),
                         OpenJtalk(str(args.dictionary)), cpu_num_threads=3)
     with VoiceModelFile.open(str(args.model)) as model:
         synth.load_voice_model(model)
+    if args.activities_only:
+        build_activities(synth)
+        return
     build_contrasts(synth)
     if args.contrasts_only:
         return
@@ -199,16 +227,18 @@ def build(args):
     pending = DEST/"catalog.tmp"
     pending.write_text("\n".join(parts)+"\n")
     pending.replace(DEST/"catalog.js")
+    build_activities(synth)
     print(f"{len(generated)} MP3s, {len(used_human)} human kana, {len(replies)} learner replies")
 
 
 if __name__ == "__main__":
     parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--activities-only",action="store_true")
     parser.add_argument("--contrasts-only", action="store_true")
     parser.add_argument("--recordings", type=Path)
     for flag in ["runtime","dictionary","model"]:
         parser.add_argument("--"+flag,type=Path,required=True)
     args = parser.parse_args()
-    if not args.contrasts_only and args.recordings is None:
+    if not (args.contrasts_only or args.activities_only) and args.recordings is None:
         parser.error("--recordings is required for a full rebuild")
     build(args)

@@ -1,4 +1,5 @@
-import { createRecorder, recordingButton } from "./recording.js?v=8";
+import { activityTitles, createListening } from "./listening-activities.js";
+import { createRecorder, recordingButton } from "./recording.js?v=9";
 import { contrastById } from "./contrast-data.js";
 import {
   contrastView,
@@ -6,9 +7,9 @@ import {
   handleContrast,
   stopContrast,
   leaveContrast,
-} from "./contrast-view.js";
+} from "./contrast-view.js?v=9";
 import { lessons, references } from "./lessons.js";
-import { createPractice } from "./practice.js?v=5";
+import { createPractice } from "./practice.js?v=9";
 import { sceneById } from "./scenes.js";
 import { kanaRows, kanaNotes, extraKana } from "./kana.js";
 import { strokes } from "./strokes.js?v=3";
@@ -20,8 +21,8 @@ import {
   handleGuide,
   changeGuideRow,
   stopGuidePlayback,
-} from "./guide-view.js?v=5";
-import { speak, stopAudio } from "./audio.js?v=5";
+} from "./guide-view.js?v=9";
+import { speak, stopAudio } from "./audio.js?v=9";
 
 const tracks = [
   {
@@ -141,7 +142,19 @@ function save() {
 }
 const main = document.querySelector("main");
 const recordButton = (options) => recordingButton(esc, options);
+const listening = createListening({
+  recordButton,
+  soundButton,
+  esc,
+  silence,
+  speak,
+  slow: () => state.slow,
+});
 const mic = createRecorder({
+  onRecordedClose: (action) => {
+    if (action === "station-repeat" && location.hash === "#practice/platform")
+      listening.repeat();
+  },
   speak,
   stopAudio,
   silence,
@@ -182,6 +195,7 @@ let audioEpoch = 0,
   audioButton = null,
   sequence = false;
 function silence() {
+  listening.stop();
   audioEpoch++;
   sequence = false;
   stopContrast();
@@ -645,11 +659,16 @@ function lessonGuideLinks(id, n) {
 function readerStage(l) {
   const n = stageIndex;
   if (n === l.steps.length + 1) {
-    const extra = sceneById.has(l.id)
+    let extra = sceneById.has(l.id)
       ? '<a class="btn" href="#practice/scene/' +
         l.id +
         '">把本课用在情景里 →</a>'
       : '<a class="btn" href="#practice/daily">去今日复习 →</a>';
+    if (l.id === "t02")
+      extra +=
+        '<a class="btn" href="#practice/platform">听站员回答，选站台 →</a>';
+    if (l.id === "c05")
+      extra += '<a class="btn" href="#practice/anime">听原创动漫对话 →</a>';
     return (
       quizStage(l) +
       (session.finished
@@ -1131,12 +1150,14 @@ function go() {
   mic.close();
   const [raw, arg, num, script] = location.hash.slice(1).split("/");
   route = raw || "home";
+  listening.leave(route === "practice" ? arg : null);
   if (route !== "practice" || arg !== "sounds") leaveContrast();
   if (route !== "practice" || arg !== "daily") practice.leaveDaily();
   if (
     route === "practice" &&
     arg &&
     !(
+      Object.hasOwn(activityTitles, arg) ||
       arg === "daily" ||
       (arg === "sounds" && (!num || contrastById.has(num))) ||
       (arg === "scene" && sceneById.has(num))
@@ -1191,7 +1212,9 @@ function go() {
     practice: () =>
       arg === "sounds"
         ? contrastView(num, guideContext)
-        : practice.view(arg, num),
+        : Object.hasOwn(activityTitles, arg)
+          ? listening.view(arg)
+          : practice.view(arg, num),
     review: reviewView,
     about,
   };
@@ -1214,7 +1237,12 @@ function go() {
           ? guideById.get(arg).title + " · 逐行跟练"
           : "五十音图",
       review: "复习手帖",
-      practice: arg === "sounds" ? "相近音听辨" : practice.title(arg, num),
+      practice:
+        arg === "sounds"
+          ? "相近音听辨"
+          : Object.hasOwn(activityTitles, arg)
+            ? activityTitles[arg]
+            : practice.title(arg, num),
       about: "教材与素材来源",
     }[route] ||
     "页面未找到";
@@ -1299,6 +1327,10 @@ main.addEventListener("click", (e) => {
   const { action, key } = button.dataset;
   if (action === "record-open") {
     mic.open(button);
+    return;
+  }
+  if (action.startsWith("listen-")) {
+    listening.handle(button);
     return;
   }
   if (action.startsWith("contrast-")) {
@@ -1447,5 +1479,9 @@ document.querySelector(".skip").addEventListener("click", (e) => {
   main.focus();
 });
 window.addEventListener("pagehide", silence);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) practice.refreshDay();
+});
+window.addEventListener("focus", practice.refreshDay);
 window.addEventListener("hashchange", go);
 go();

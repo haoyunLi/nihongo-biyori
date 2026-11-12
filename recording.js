@@ -1,6 +1,15 @@
-import { createTimingSession } from "./rhythm-client.js?v=8";
+import { reviewableBeats, rhythmCard, rhythmTypes } from "./rhythm-review.js";
+import {
+  dayLabel,
+  localDay,
+  readBook,
+  scheduleRhythm,
+  updateBook,
+} from "./recall.js?v=9";
+import { moraLabels } from "./mora-groups.js";
+import { createTimingSession } from "./rhythm-client.js?v=9";
 import { renderFeedback } from "./rhythm-feedback.js?v=8";
-import { createExcerptPlayer } from "./excerpt-player.js?v=8";
+import { createExcerptPlayer } from "./excerpt-player.js?v=9";
 
 // Only a user gesture inside the open panel starts microphone capture.
 const micIcon =
@@ -17,15 +26,26 @@ export function recordingButton(
     tip = "",
     compact = false,
     zh = "",
+    blind = false,
+    focusFirst,
+    afterRecording = "",
   },
 ) {
   const title = "跟读录音：" + jp;
-  return `<button type="button" class="${compact ? "mic-icon" : "tool record-link"}" data-action="record-open" data-reference="${esc(jp)}" data-reading="${esc(kana)}" data-audio="${esc(audio)}" data-voice="${learner ? "learner" : "narrator"}" data-tip="${esc(tip)}" data-zh="${esc(zh)}" aria-label="${esc(title)}" title="${esc(title)}">${micIcon}${compact ? "" : " 录音对照"}</button>`;
+  return `<button type="button" class="${compact ? "mic-icon" : "tool record-link"}" data-action="record-open" data-after-recording="${esc(afterRecording)}" data-blind="${blind ? "yes" : ""}" data-focus-first="${Number.isInteger(focusFirst) ? focusFirst : ""}" data-reference="${esc(jp)}" data-reading="${esc(kana)}" data-audio="${esc(audio)}" data-voice="${learner ? "learner" : "narrator"}" data-tip="${esc(tip)}" data-zh="${esc(zh)}" aria-label="${esc(title)}" title="${esc(title)}">${micIcon}${compact ? "" : " 录音对照"}</button>`;
 }
 
-export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
+export function createRecorder({
+  speak,
+  stopAudio,
+  silence,
+  slow,
+  notify,
+  onRecordedClose,
+}) {
   let panel,
     target,
+    reviewChoices = [],
     stream,
     recorder,
     clip = "",
@@ -55,8 +75,83 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
         window.MediaRecorder,
     );
 
+  function reviewPicker() {
+    const box = el("[data-review-beats]"),
+      select = el("[data-review-select]");
+    box.hidden =
+      state !== "idle" ||
+      !reviewChoices.length ||
+      (target?.blind === "yes" && !clip);
+    if (box.hidden) return;
+    const card = rhythmCard(reviewChoices[select.selectedIndex]);
+    const saved = card && readBook().history[card.id]?.due === localDay() + 1;
+    const btn = el('[data-rec="save-beat"]');
+    btn.disabled = !card || saved;
+    btn.textContent = saved ? "已安排明天复习" : "明天再练这拍";
+  }
+  async function loadReviewChoices(current) {
+    let choices;
+    try {
+      choices = await reviewableBeats(current);
+    } catch {
+      return;
+    }
+    if (target !== current) return;
+    reviewChoices = choices;
+    const select = el("[data-review-select]");
+    select.replaceChildren(
+      ...choices.map((choice) => {
+        const label = moraLabels(choice.kana)
+          .slice(choice.first, choice.first + choice.count)
+          .join("・");
+        return new Option(
+          rhythmTypes[choice.type].name +
+            " · 第 " +
+            (choice.first + 1) +
+            (choice.count > 1 ? "–" + (choice.first + choice.count) : "") +
+            " 拍「" +
+            label +
+            "」",
+          String(choice.first),
+        );
+      }),
+    );
+    syncBeat(
+      result?.units?.[excerpt?.selection()?.index]?.first ??
+        (current.focusFirst !== "" ? Number(current.focusFirst) : undefined),
+    );
+    reviewPicker();
+  }
+  function syncBeat(first) {
+    if (reviewChoices.some((c) => c.first === first)) {
+      if (el("[data-review-select]").value !== String(first))
+        el("[data-review-saved]").textContent = "";
+      el("[data-review-select]").value = String(first);
+      reviewPicker();
+    }
+  }
+  async function saveBeat() {
+    const current = target,
+      entry = reviewChoices[el("[data-review-select]").selectedIndex],
+      day = localDay();
+    if (!entry) return;
+    await updateBook(
+      (book) => scheduleRhythm(book, entry, day),
+      () => notify("本次复习记录暂时只保存在当前页面。"),
+    );
+    if (target !== current) return;
+    reviewPicker();
+    el("[data-review-saved]").textContent =
+      dayLabel(day + 1) + " 在「今日复习」先读原词句，再换词。";
+  }
   function controls() {
     const busy = state !== "idle";
+    const blind = target?.blind === "yes" && !clip;
+    el('[data-rec="blind-reveal"]').hidden = !blind || busy;
+    el('[data-rec="reference"]').hidden = blind;
+    el("[data-record-kana]").hidden = blind;
+    el("[data-record-tip]").hidden = blind;
+    el("[data-review-beats]").hidden = busy || !reviewChoices.length || blind;
     const partBusy = Boolean(partCapture && busy);
     el("[data-rhythm]").hidden = (busy && !partBusy) || !clip;
     excerpt?.captureState(state, partCapture, supported());
@@ -129,12 +224,14 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
     state = "idle";
     partCapture = null;
   }
-  function close() {
+  function close(fromUser = false) {
     if (!target) return;
+    const follow = fromUser === true && clip && target.afterRecording;
     release();
     if (panel.open) panel.close();
     if (trigger?.isConnected) trigger.focus({ preventScroll: true });
     trigger = null;
+    if (follow) onRecordedClose?.(follow);
   }
   function init() {
     panel = document.createElement("dialog");
@@ -142,15 +239,20 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
     panel.setAttribute("aria-labelledby", "record-heading");
     panel.innerHTML = `<div class="record-header"><h2 id="record-heading">跟读录音对照</h2><button type="button" class="tool" data-rec="close">关闭</button></div>
       <div class="reference-line"><strong lang="ja" data-record-jp></strong><p class="reading" lang="ja" data-record-kana></p><p data-record-zh></p></div>
-      <p data-record-tip></p><div class="actions"><button class="tool" data-rec="reference" data-idle="听示范">听示范</button><button class="btn primary" data-rec="capture">开始录音</button><span class="record-time" aria-hidden="true" data-record-time></span></div>
+      <p data-record-tip></p><div class="actions"><button class="tool" data-rec="reference" data-idle="听示范">听示范</button><button class="btn primary" data-rec="capture">开始录音</button><span class="record-time" aria-hidden="true" data-record-time></span><button class="tool" type="button" data-rec="blind-reveal" hidden>我已自己读过，显示示范</button></div>
       <div class="actions take-controls"><button class="tool" data-rec="mine" data-idle="听自己的录音">听自己的录音</button><button class="tool" data-rec="both" data-idle="依次听示范和自己">依次听示范和自己</button><button class="tool" data-rec="previous" data-idle="听上一遍" hidden>听上一遍</button></div>
       <p class="record-status" role="status" data-record-status></p>
       <section class="rhythm-feedback" aria-label="跟读节奏反馈" data-rhythm hidden><div data-feedback aria-live="polite"></div><button class="tool rhythm-retry" type="button" data-rec="retry-rhythm" hidden>按提示重读</button></section>
+      <div class="beat-bookmark" data-review-beats hidden><label>复习哪一拍 <select data-review-select></select></label><button type="button" class="tool" data-rec="save-beat">明天再练这拍</button><span role="status" data-review-saved></span></div>
       <p class="record-note">每遍最多 15 秒。录音和节奏分析只在本机进行，关闭窗口即清除。整句与各个选区分别保留最近两遍。</p>`;
     document.body.append(panel);
+    el("[data-review-select]").onchange = () => {
+      el("[data-review-saved]").textContent = "";
+      reviewPicker();
+    };
     panel.addEventListener("cancel", (e) => {
       e.preventDefault();
-      close();
+      close(true);
     });
     panel.addEventListener("close", () => {
       if (!panel.open && target) release();
@@ -164,7 +266,14 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
         return;
       }
       const key = e.target.closest("[data-rec]")?.dataset.rec;
-      if (key === "close") close();
+      if (key === "blind-reveal" && state === "idle") {
+        target.blind = "";
+        reviewPicker();
+        controls();
+        sayStatus("可以听示范，或录下自己再对照。");
+        el('[data-rec="reference"]').focus({ preventScroll: true });
+      } else if (key === "save-beat") void saveBeat();
+      else if (key === "close") close(true);
       else if (key === "capture-part") {
         if (state === "recording" && partCapture) finishCapture();
         else if (state === "idle" && excerpt?.selection())
@@ -188,6 +297,9 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
     silence();
     trigger = button;
     target = { ...button.dataset };
+    reviewChoices = [];
+    el("[data-review-saved]").textContent = "";
+    void loadReviewChoices(target);
     timing = createTimingSession(target);
     excerptPreferences = {
       context: true,
@@ -237,8 +349,16 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
           sayStatus("");
         },
         retry,
+        syncBeat,
       );
-      const focus = result.target ?? previousResult?.target;
+      const practiced =
+        target.focusFirst !== "" && target.focusFirst !== undefined
+          ? result.units.findIndex(
+              (u) => u.first === Number(target.focusFirst) && u.reliable,
+            )
+          : -1;
+      const focus =
+        practiced >= 0 ? practiced : (result.target ?? previousResult?.target);
       if (Number.isInteger(focus) && result.units[focus]?.reliable)
         excerpt.select(focus);
     }
@@ -358,6 +478,7 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
             : result;
           result = null;
           clip = URL.createObjectURL(blob);
+          reviewPicker();
           sayStatus("录好了。可以回听这一遍。");
           void analyze(blob, slowMode);
         } else {

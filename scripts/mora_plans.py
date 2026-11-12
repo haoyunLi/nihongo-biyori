@@ -5,7 +5,7 @@ import hashlib
 import json
 import subprocess
 
-from generate_audio import ROOT, collect
+from generate_audio import ROOT, collect, activity_inputs
 from voicevox_core.blocking import Onnxruntime, OpenJtalk, Synthesizer, VoiceModelFile
 
 
@@ -44,6 +44,11 @@ def main(args):
     for entry in json.loads(contrast_words):
         spoken = entry["spoken"]
         items["contrast:" + spoken] = (spoken, 10005)
+
+    for item in activity_inputs():
+        style = 10001 if item.get("learner") else 10005
+        spoken = item.get("spoken", item["jp"])
+        items[f"activity:{style}:{spoken}"] = (spoken, style)
 
     directory = ROOT / "assets/timing"
     allowed = set(json.loads((directory / "model.json").read_text())["names"])

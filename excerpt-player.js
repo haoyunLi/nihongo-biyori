@@ -7,6 +7,7 @@ export function createExcerptPlayer(
   preferences,
   beforePlay,
   retryButton,
+  onSelect,
 ) {
   host.innerHTML = `<div class="excerpt-heading"><strong>片段对照</strong><span data-range></span></div>
     <p class="excerpt-kana" lang="ja" data-kana></p>
@@ -212,6 +213,7 @@ export function createExcerptPlayer(
     if (!next) return false;
     discard();
     selected = index;
+    onSelect?.(units[index].first);
     range = next;
     key = range.from + "-" + range.to;
     showAttempts();

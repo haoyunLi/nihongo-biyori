@@ -11,7 +11,9 @@ import {
   recallCards,
   recordRating,
   updateBook,
-} from "./recall.js?v=5";
+} from "./recall.js?v=9";
+import { moraLabels } from "./mora-groups.js";
+import { rhythmTypes } from "./rhythm-review.js";
 import { scenes, sceneById, chunkReading } from "./scenes.js";
 
 const catalog = new Map();
@@ -61,7 +63,7 @@ export function createPractice(ctx) {
           (id) => round.first[id] === "again" && !round.retry[id],
         ).length +
         " 张";
-    return `<div class="practice-entry"><div><h2>练习室</h2><p>${note} · 自己回想，再听示范</p></div><div class="actions"><a class="btn" href="#practice/daily">今日复习</a><a class="btn" href="#practice/sounds">相近音听辨</a><a class="btn" href="#practice">情景接话</a></div></div>`;
+    return `<div class="practice-entry"><div><h2>练习室</h2><p>${note} · 自己回想，再听示范</p></div><div class="actions"><a class="btn" href="#practice/daily">今日复习</a><a class="btn" href="#practice/sounds">相近音听辨</a><a class="btn" href="#practice">进入练习室</a></div></div>`;
   }
   function hub() {
     const { round, pending, plan } = snap();
@@ -75,7 +77,7 @@ export function createPractice(ctx) {
         "下一次复习在 " +
         dayLabel(plan.nextDue) +
         "。现在可以选一个场景练接话。";
-    return `<div class="inner narrow"><h1>练习室</h1><section class="practice-feature"><h2>今日复习</h2><p>${desc}</p><a class="btn primary" href="#practice/daily">${pending ? "进入复习 · " + round.ids.length + " 张" : "查看复习安排"} →</a></section><div class="sound-entry"><div><h2>相近音听辨</h2><p>听「来て」和「切手」，辨别中间多出的一拍，再录下自己的说法核对。</p></div><a class="btn" href="#practice/sounds">进入听辨 →</a></div><div class="section-head"><h2>情景接话</h2></div><p class="scene-intro">选一个你想去的地方。听对方说话，再用打乱的日语语块拼出自己的回应。</p><div class="scene-list">${sceneList()}</div></div>`;
+    return `<div class="inner narrow"><h1>练习室</h1><section class="practice-feature"><h2>今日复习</h2><p>${desc}</p><a class="btn primary" href="#practice/daily">${pending ? "进入复习 · " + round.ids.length + " 张" : "查看复习安排"} →</a></section><div class="sound-entry"><div><h2>相近音听辨</h2><p>听「来て」和「切手」，辨别中间多出的一拍，再录下自己的说法核对。</p></div><a class="btn" href="#practice/sounds">进入听辨 →</a></div><div class="listen-entries"><a class="scene-link" href="#practice/platform"><span>旅行听力</span><strong>听回答，去站台</strong><span>听站员报数，在图上选入口 →</span></a><a class="scene-link" href="#practice/anime"><span>动漫听力</span><strong>动漫台词拆听</strong><span>先听两位朋友说话，再拆口语 →</span></a></div><div class="section-head"><h2>情景接话</h2></div><p class="scene-intro">选一个你想去的地方。听对方说话，再用打乱的日语语块拼出自己的回应。</p><div class="scene-list">${sceneList()}</div></div>`;
   }
   function crumbs(current) {
     return `<div class="crumb"><a href="#practice">练习室</a><span aria-hidden="true">›</span>${current}</div>`;
@@ -84,7 +86,7 @@ export function createPractice(ctx) {
     return ctx.esc(
       card.kind === "kana"
         ? card.item.hira
-        : card.kind === "say" || card.kind === "word"
+        : card.kind === "say" || card.kind === "word" || card.kind === "rhythm"
           ? card.item.jp
           : card.q.prompt,
     );
@@ -110,6 +112,16 @@ export function createPractice(ctx) {
     return `<div class="model-line"><strong lang="ja">${ctx.esc(v.jp)}</strong>${ctx.soundButton(v.jp, "听示范", v.kana)}</div><p class="reading"><span lang="ja">${ctx.esc(v.kana)}</span> · ${ctx.esc(v.romaji)}</p>`;
   }
   function explanation(card) {
+    if (card.kind === "rhythm")
+      return (
+        "<p>" +
+        ctx.esc(card.item.jp) +
+        " → " +
+        ctx.esc(card.transfer.jp) +
+        " · " +
+        rhythmTypes[card.type].name +
+        "</p>"
+      );
     if (card.kind === "say") return dialogAnswer(card);
     if (card.kind === "word")
       return dialogAnswer(card) + "<p>" + ctx.esc(card.item.zh) + "</p>";
@@ -120,7 +132,37 @@ export function createPractice(ctx) {
     const v = card.item;
     return `<div class="model-line"><strong lang="ja">${v.hira} ／ ${v.kata}</strong> ${ctx.soundButton(v.hira, "听假名原音")}</div><p>读作 <b>${v.romaji}</b>。</p>`;
   }
+  function rhythmQuestion(card) {
+    const step = drill.rhythmStep || 0,
+      second = step >= 2,
+      revealed = step % 2 === 1;
+    const item = second ? card.transfer : card.item;
+    const beats = moraLabels(item.kana);
+    const chunks = beats
+      .map((b, i) =>
+        i >= item.first && i < item.first + item.count
+          ? "<mark>" + ctx.esc(b) + "</mark>"
+          : ctx.esc(b),
+      )
+      .join("・");
+    const record = ctx.recordButton({
+      ...item,
+      blind: !revealed,
+      focusFirst: item.first,
+      tip: rhythmTypes[card.type].tip,
+    });
+    const audio = ctx.soundButton(
+      item.audio || item.jp,
+      "听示范",
+      item.kana,
+      item.learner,
+    );
+    return `<h2>${second ? "换个词，试试同一种拍" : "先自己读原词句"}</h2><p class="recall-prompt" lang="ja">${ctx.esc(item.jp)}</p><p>${ctx.esc(item.zh)}</p>
+    ${revealed ? `<p class="review-beats" lang="ja">${chunks} ${audio}</p><p>${rhythmTypes[card.type].tip}</p>` : "<p>先看字读出声，也可以录下自己，再听示范。</p>"}
+    <div class="actions">${record}${step < 3 ? `<button class="btn primary" data-action="recall-rhythm-step">${revealed ? "换个词试试" : "读完了，对照示范"}</button>` : '<button class="btn primary" data-action="recall-rate" data-result="ok">两个都能独立读</button><button class="tool" data-action="recall-rate" data-result="again">还需复习</button>'}</div>`;
+  }
   function cardQuestion(card, book) {
+    if (card.kind === "rhythm") return rhythmQuestion(card);
     if (card.kind === "kana") {
       const record = book.history[card.id];
       const mode = (record?.level || 0) % 3;
@@ -154,8 +196,10 @@ export function createPractice(ctx) {
       `<div class="recall-model">${explanation(card)}</div><p>核对自己的答案，再选择这次的熟悉程度。</p><div class="actions"><button class="btn primary" data-action="recall-rate" data-result="ok">${listening ? "我想起了词义" : "我能独立说出"}</button><button class="tool" data-action="recall-rate" data-result="again">还需复习</button></div>`
     );
   }
+  let renderedDay;
   function daily() {
     const { book, day, plan, round, pending } = snap();
+    renderedDay = day;
     const header = `<div class="inner narrow">${crumbs("今日复习")}<h1>今日复习</h1>`;
     if (feedback && feedback.day !== day) feedback = null;
     if (feedback) {
@@ -180,17 +224,19 @@ export function createPractice(ctx) {
     const mode =
       phase === "retry"
         ? "刚才没记牢，再来一次"
-        : card.kind === "mistake"
-          ? card.pair
-            ? "相近音复听"
-            : "来自错题本"
-          : card.kind === "say"
-            ? "表达回想"
-            : card.kind === "word"
-              ? "上次听错的情景词"
-              : round.warmup
-                ? "五元音热身"
-                : "假名混练";
+        : card.kind === "rhythm"
+          ? "原词句与换词"
+          : card.kind === "mistake"
+            ? card.pair
+              ? "相近音复听"
+              : "来自错题本"
+            : card.kind === "say"
+              ? "表达回想"
+              : card.kind === "word"
+                ? "上次听错的情景词"
+                : round.warmup
+                  ? "五元音热身"
+                  : "假名混练";
     const progress =
       phase === "retry"
         ? "本轮重练"
@@ -360,6 +406,11 @@ export function createPractice(ctx) {
     if (action.startsWith("recall-")) {
       const c = drill && recallCards.get(drill.id);
       if (!c) return;
+      if (action === "recall-rhythm-step" && c.kind === "rhythm") {
+        drill.rhythmStep = Math.min((drill.rhythmStep || 0) + 1, 3);
+        redraw();
+        return;
+      }
       if (action === "recall-reveal") {
         drill.revealed = true;
         redraw();
@@ -455,6 +506,10 @@ export function createPractice(ctx) {
     sceneView,
     handle,
     submit,
+    refreshDay() {
+      if (location.hash === "#practice/daily" && renderedDay !== localDay())
+        redraw();
+    },
     leaveDaily() {
       drill = null;
       feedback = null;
