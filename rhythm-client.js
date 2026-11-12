@@ -31,7 +31,8 @@ export function createTimingSession(target) {
     target.voice === "learner",
   );
   const controller = new AbortController();
-  let reference,
+  let samples,
+    reference,
     worker,
     pending,
     number = 0,
@@ -50,6 +51,7 @@ export function createTimingSession(target) {
   async function analyze(blob, slow) {
     if (!stem) return unavailable("reference");
     const id = ++number;
+    samples = null;
     finish(unavailable());
     try {
       reference ??= fetch(
@@ -71,29 +73,32 @@ export function createTimingSession(target) {
       ]);
       if (closed || id !== number) return unavailable();
       if (!worker) {
-        worker = new Worker(new URL("./rhythm-worker.js", import.meta.url), {
-          type: "module",
-        });
+        worker = new Worker(
+          new URL("./rhythm-worker.js?v=7", import.meta.url),
+          {
+            type: "module",
+          },
+        );
         worker.onmessage = ({ data }) => {
           if (pending?.id === data.id) finish(data.result);
         };
         worker.onerror = stop;
       }
-      return await new Promise((resolve) => {
+      const result = await new Promise((resolve) => {
         pending = { id, resolve, timer: setTimeout(stop, 30000) };
-        const sample = ref.slice();
-        worker.postMessage(
-          {
-            id,
-            stem,
-            reading: target.reading || target.reference,
-            slow,
-            reference: sample,
-            take,
-          },
-          [sample.buffer, take.buffer],
-        );
+        // Clone into the worker so the main thread keeps the matching PCM for excerpts.
+        worker.postMessage({
+          id,
+          stem,
+          reading: target.reading || target.reference,
+          slow,
+          reference: ref,
+          take,
+        });
       });
+      if (!closed && id === number && result.status === "measured")
+        samples = { reference: ref, take };
+      return result;
     } catch (e) {
       if (id === number) finish(unavailable());
       return unavailable(
@@ -103,8 +108,12 @@ export function createTimingSession(target) {
   }
   return {
     analyze,
+    get samples() {
+      return samples;
+    },
     close() {
       closed = true;
+      samples = null;
       number++;
       controller.abort();
       stop();

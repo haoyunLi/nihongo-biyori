@@ -1711,7 +1711,9 @@ footer > div {
   width: min(520px, calc(100vw - 28px));
   max-height: calc(100dvh - 32px);
   overflow: auto;
-  padding: clamp(18px, 3.5vw, 30px);
+  --record-pad: clamp(18px, 3.5vw, 30px);
+  padding: var(--record-pad);
+  scroll-padding: 74px 0 12px;
   box-shadow: 0 12px 45px #23221830;
 }
 .record-panel::backdrop {
@@ -1852,4 +1854,143 @@ footer > div {
 }
 .rhythm-retry {
   margin-top: 8px;
+}
+
+.beat-listen {
+  background: transparent;
+  color: inherit;
+  border: 0;
+  padding: 3px 0;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.rhythm-feedback h3 .beat-listen {
+  display: inline-flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 9px;
+}
+.beat-listen-action {
+  font-size: 13px;
+}
+.beat-listen-action,
+.rhythm-feedback th .beat-listen {
+  color: #315b49;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.beat-excerpt {
+  background: var(--paper);
+  border: 1px solid #b8c4b5;
+  border-radius: 6px;
+  padding: 12px;
+  margin: 12px 0 5px;
+}
+.excerpt-heading,
+.excerpt-transport,
+.excerpt-settings {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.excerpt-heading {
+  justify-content: space-between;
+}
+.excerpt-heading span,
+.excerpt-settings label,
+.excerpt-order,
+.excerpt-hint,
+.excerpt-error {
+  font-size: 13px;
+}
+.beat-excerpt .excerpt-kana {
+  margin: 6px 0 10px;
+  color: #3a4941;
+  font-size: clamp(16px, 4.5vw, 20px);
+  line-height: 1.7;
+}
+.excerpt-kana > span,
+.excerpt-kana > mark {
+  display: inline-block;
+  white-space: nowrap;
+}
+.excerpt-kana mark {
+  padding: 2px 4px;
+  background: #f5dfbd;
+  border-bottom: 2px solid #ac6141;
+  color: #492b20;
+  border-radius: 2px;
+  font-weight: 700;
+}
+.excerpt-settings {
+  align-items: flex-end;
+}
+.excerpt-settings label {
+  display: grid;
+  gap: 3px;
+}
+.excerpt-settings select {
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid #aca697;
+  border-radius: 4px;
+  min-height: 34px;
+  padding: 3px 5px;
+}
+.excerpt-settings .excerpt-loop {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  cursor: pointer;
+}
+.excerpt-loop input {
+  accent-color: #345d4b;
+}
+.excerpt-transport {
+  margin-top: 10px;
+}
+.beat-excerpt [data-excerpt-play] {
+  color: white;
+  background: #345d4b;
+  border-color: #345d4b;
+}
+.excerpt-order span {
+  border-bottom: 2px solid transparent;
+}
+.beat-excerpt[data-phase="reference"] [data-voice="reference"],
+.beat-excerpt[data-phase="take"] [data-voice="take"] {
+  color: #25533e;
+  font-weight: 700;
+  border-color: currentColor;
+}
+
+.record-panel .record-header {
+  position: sticky;
+  top: calc(0px - var(--record-pad));
+  z-index: 1;
+  margin: calc(0px - var(--record-pad)) calc(0px - var(--record-pad)) 0;
+  padding: var(--record-pad) var(--record-pad) 8px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+@media (max-width: 480px) {
+  .excerpt-settings {
+    column-gap: 6px;
+  }
+}
+.record-status:empty {
+  display: none;
+}
+.beat-excerpt .rhythm-retry {
+  margin-top: 0;
+}
+.beat-excerpt .excerpt-order {
+  margin-bottom: 9px;
+}
+.beat-excerpt[data-sounding] .excerpt-kana mark {
+  outline: 2px solid #915c37;
 }

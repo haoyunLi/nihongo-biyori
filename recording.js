@@ -1,5 +1,6 @@
-import { createTimingSession } from "./rhythm-client.js";
-import { renderFeedback } from "./rhythm-feedback.js";
+import { createTimingSession } from "./rhythm-client.js?v=7";
+import { renderFeedback } from "./rhythm-feedback.js?v=7";
+import { createExcerptPlayer } from "./excerpt-player.js";
 
 // Only a user gesture inside the open panel starts microphone capture.
 const micIcon =
@@ -30,6 +31,8 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
     clip = "",
     previousClip = "",
     timing,
+    excerpt,
+    excerptPreferences,
     result,
     previousResult,
     analysisRound = 0,
@@ -83,10 +86,19 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
   }
   function stopListening() {
     playback++;
+    excerpt?.stop();
     stopAudio();
     endPersonal?.();
     endPersonal = null;
     listening = "";
+  }
+  function clearFeedback() {
+    excerpt?.destroy();
+    excerpt = null;
+    // The same retry control sits beside the active excerpt or below a
+    // general result. Keep it when replacing the previous attempt's DOM.
+    el("[data-rhythm]").append(el('[data-rec="retry-rhythm"]'));
+    el("[data-feedback]").replaceChildren();
   }
   function release() {
     launch++;
@@ -101,6 +113,7 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
     stopTracks();
     recorder = null;
     analysisRound++;
+    clearFeedback();
     timing?.close();
     timing = null;
     result = previousResult = null;
@@ -108,7 +121,6 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
     if (previousClip) URL.revokeObjectURL(previousClip);
     clip = previousClip = "";
     el("[data-rhythm]").hidden = true;
-    el("[data-feedback]").replaceChildren();
     target = null;
     state = "idle";
   }
@@ -139,6 +151,13 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
       if (!panel.open && target) release();
     });
     panel.addEventListener("click", (e) => {
+      const beat = e.target.closest("[data-beat]");
+      if (beat && state === "idle" && excerpt) {
+        const details = beat.closest("details");
+        if (details) details.open = false;
+        excerpt.select(Number(beat.dataset.beat), true, Boolean(details));
+        return;
+      }
       const key = e.target.closest("[data-rec]")?.dataset.rec;
       if (key === "close") close();
       else if (key === "capture") {
@@ -160,6 +179,11 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
     trigger = button;
     target = { ...button.dataset };
     timing = createTimingSession(target);
+    excerptPreferences = {
+      context: true,
+      rate: slow() ? 0.75 : 1,
+      loop: false,
+    };
     el("[data-rhythm]").hidden = true;
     el('[data-rec="retry-rhythm"]').hidden = true;
     el("[data-record-jp]").textContent = target.reference;
@@ -180,6 +204,7 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
   }
   async function analyze(blob, slowMode) {
     const round = ++analysisRound;
+    clearFeedback();
     el("[data-rhythm]").hidden = false;
     const feedback = el("[data-feedback]");
     const retry = el('[data-rec="retry-rhythm"]');
@@ -189,7 +214,24 @@ export function createRecorder({ speak, stopAudio, silence, slow, notify }) {
     const measured = await timing.analyze(blob, slowMode);
     if (round !== analysisRound || !target) return;
     result = measured;
-    renderFeedback(feedback, result, previousResult);
+    const host = renderFeedback(feedback, result, previousResult);
+    if (host && timing.samples) {
+      excerpt = createExcerptPlayer(
+        host,
+        result.units,
+        timing.samples,
+        excerptPreferences,
+        () => {
+          stopListening();
+          controls();
+          sayStatus("");
+        },
+        retry,
+      );
+      const focus = result.target ?? previousResult?.target;
+      if (Number.isInteger(focus) && result.units[focus]?.reliable)
+        excerpt.select(focus);
+    }
     feedback.setAttribute("aria-busy", "false");
     retry.hidden = false;
     retry.textContent = result.units?.[result.target]

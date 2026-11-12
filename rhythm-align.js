@@ -316,7 +316,9 @@ export function compareAlignment(ref, take, slow = false) {
       gap: u.gap,
       disagreement,
       referenceStart: Math.max(0, ref.features.offsetMs + r.start * 10),
+      referenceEnd: Math.max(0, ref.features.offsetMs + r.end * 10),
       start: Math.max(0, take.features.offsetMs + u.start * 10),
+      end: Math.max(0, take.features.offsetMs + u.end * 10),
     };
   });
   const ratios = units.filter((u) => u.reliable).map((u) => u.userMs / u.refMs);

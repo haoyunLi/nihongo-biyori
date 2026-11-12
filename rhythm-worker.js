@@ -1,4 +1,4 @@
-import { makeGroups, measure, compareAlignment } from "./rhythm-align.js";
+import { makeGroups, measure, compareAlignment } from "./rhythm-align.js?v=7";
 
 async function asset(name, format) {
   const r = await fetch(new URL("./assets/timing/" + name, import.meta.url));

@@ -54,6 +54,13 @@ function append(parent, tag, text, cls) {
   parent.append(node);
   return node;
 }
+function beatButton(parent, label, index) {
+  const button = append(parent, "button", label, "beat-listen");
+  button.type = "button";
+  button.dataset.beat = String(index);
+  button.setAttribute("aria-label", label + "，听片段对照");
+  return button;
+}
 function comparison(parent, last, result) {
   const before = last?.units?.[last.target];
   if (!before) return;
@@ -94,7 +101,16 @@ export function renderFeedback(parent, result, last) {
   const unit = result.units[result.target];
   if (unit) {
     const short = unit.ratio < 1;
-    append(parent, "h3", name(unit) + (short ? "可能偏短" : "可能偏长"));
+    const heading = append(parent, "h3");
+    const button = beatButton(
+      heading,
+      name(unit) + (short ? "可能偏短" : "可能偏长"),
+      result.target,
+    );
+    append(button, "span", "▶ 听对照", "beat-listen-action").setAttribute(
+      "aria-hidden",
+      "true",
+    );
     append(parent, "p", instruction(unit, short, result.single));
     append(
       parent,
@@ -127,6 +143,8 @@ export function renderFeedback(parent, result, last) {
       "rhythm-estimate",
     );
   comparison(parent, last, result);
+  const excerpt = append(parent, "section", "", "beat-excerpt");
+  excerpt.hidden = true;
   const details = append(parent, "details");
   append(details, "summary", "查看各拍的估计时长");
   append(
@@ -141,13 +159,17 @@ export function renderFeedback(parent, result, last) {
   for (const label of ["拍", "这遍", "示范参考"])
     append(head, "th", label).scope = "col";
   const body = append(table, "tbody");
-  for (const u of result.units) {
+  for (const [index, u] of result.units.entries()) {
     const row = append(body, "tr");
     if (u === unit) row.classList.add("rhythm-focus");
-    append(row, "th", name(u)).scope = "row";
+    const cell = append(row, "th");
+    cell.scope = "row";
+    if (u.reliable) beatButton(cell, name(u), index);
+    else cell.textContent = name(u);
     if (u.reliable) {
       append(row, "td", ms(u.userMs));
       append(row, "td", ms(u.expectedMs));
     } else append(row, "td", "边界不清楚").colSpan = 2;
   }
+  return excerpt;
 }
