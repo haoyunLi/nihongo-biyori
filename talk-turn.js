@@ -40,10 +40,27 @@ export function canAutoReply(result, decision, reason) {
   const words = result.words;
   if (!words?.length || words.some((w) => !Number.isFinite(w.conf)))
     return false;
-  const confidence = words.reduce((sum, w) => sum + w.conf, 0) / words.length;
+  // Only ignore an exact polite ending after substantive words. In a short
+  // yes/no answer, the same words can carry the entire meaning.
+  const ending = result.text.match(
+    /(?:で|を)?(?:お願いします|おねがいします|ください)$/u,
+  );
+  let content = words;
+  if (ending && ending.index > 0) {
+    let length = 0;
+    const meaningful = words.filter((w) => {
+      const start = length;
+      length += (w.word || "").length;
+      return start < ending.index;
+    });
+    if (length === result.text.length && meaningful.length)
+      content = meaningful;
+  }
+  const confidence =
+    content.reduce((sum, w) => sum + w.conf, 0) / content.length;
   return (
     confidence >= 0.83 &&
-    words.every((w) => w.conf >= 0.56) &&
+    content.every((w) => w.conf >= 0.56) &&
     !/(?:を|えーと|えっと|そのー|あのー|じゃなくて|ではなくて)$/u.test(
       result.text,
     )

@@ -46,6 +46,29 @@ test("automatic sending requires confident constituent words, a complete ending,
   );
   assert.equal(canAutoReply({ ...sample, words: [] }, result, "end"), false);
 });
+test("polite suffix uncertainty can pass, but a doubtful destination or quantity cannot", () => {
+  const words = [
+    { word: "持ち帰り", conf: 0.98 },
+    { word: "で", conf: 0.95 },
+    { word: "お", conf: 0.44 },
+    { word: "願い", conf: 0.44 },
+    { word: "し", conf: 0.9 },
+    { word: "ます", conf: 1 },
+  ];
+  const result = { text: words.map((w) => w.word).join(""), words };
+  assert.ok(canAutoReply(result, { kind: "ok" }, "end"));
+  words[0].conf = 0.49;
+  assert.equal(canAutoReply(result, { kind: "ok" }, "end"), false);
+  const count = {
+    text: "二枚ください",
+    words: [
+      { word: "二", conf: 0.45 },
+      { word: "枚", conf: 0.99 },
+      { word: "ください", conf: 1 },
+    ],
+  };
+  assert.equal(canAutoReply(count, { kind: "ok" }, "end"), false);
+});
 test("all 42 daily budgets span every actual learning step; the old graduation resumes at day 29", () => {
   assert.equal(chapterIds.length, 42);
   assert.equal(Object.keys(talks).length, 9);

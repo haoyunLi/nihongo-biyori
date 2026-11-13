@@ -11,7 +11,7 @@ import {
   voiceAvailable,
 } from "./talk-voice.js?v=13";
 
-import { canAutoReply } from "./talk-turn.js";
+import { canAutoReply } from "./talk-turn.js?v=14";
 const route = (id) => "#practice/talk" + (id ? "/" + id : "");
 const storage = "nihongo-biyori-dialogue-review-v1";
 const names = {

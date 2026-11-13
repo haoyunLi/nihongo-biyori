@@ -1,4 +1,4 @@
-import { createTalk, validTalk, talkLink } from "./talk-view.js?v=13";
+import { createTalk, validTalk, talkLink } from "./talk-view.js?v=14";
 import {
   chapterIds,
   chapterOf,
