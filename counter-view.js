@@ -145,7 +145,7 @@ export function createCounter(ctx) {
   }
   const crumbs = `<div class="crumb"><a href="#practice">练习室</a><span>›</span><a href="#practice/counter">柜台换问法</a></div>`;
   function overview() {
-    return `<h1>柜台换问法</h1><p class="lead">先把店员的两种问法连起来听，再合上文字，用已经会的日语接话。</p><section class="practice-feature"><h2>混合听六轮</h2><p>点菜、份数、用餐地点、饮料、付款和菜品有没有货，各听一题。先自己说，再核对店员问的是什么。</p><a class="btn primary" href="${url("mixed")}">开始混合接话 →</a> <a class="tool" href="#practice/counter/lunch">刚学完第14章？先听三轮</a></section><h2>按情境练</h2><div class="scene-list">${keys.map((k) => `<a class="scene-link" href="${url(k)}"><span>第 ${chapterOf(families[k].step[0])} 章</span><strong>${families[k].name}</strong><span>听两种问法 →</span></a>`).join("")}</div>`;
+    return `<h1>柜台换问法</h1><p class="lead">先把店员的两种问法连起来听，再合上文字，用已经会的日语接话。</p><section class="practice-feature"><h2>混合听六轮</h2><p>点菜、份数、用餐地点、饮料、付款和菜品有没有货，各听一题。先自己说，再核对店员问的是什么。</p><a class="btn primary" href="${url("mixed")}">开始混合接话 →</a> <a class="tool" href="#practice/talk/restaurant">从进店聊到结账</a> <a class="tool" href="#practice/counter/lunch">刚学完第14章？先听三轮</a></section><h2>按情境练</h2><div class="scene-list">${keys.map((k) => `<a class="scene-link" href="${url(k)}"><span>第 ${chapterOf(families[k].step[0])} 章</span><strong>${families[k].name}</strong><span>听两种问法 →</span></a>`).join("")}</div>`;
   }
   function guide() {
     const f = families[section];

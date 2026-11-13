@@ -1,6 +1,6 @@
 import {addCounterChecks} from "./counter-data.js";
 import {addBridges} from "./chapter-bridges.js";
-import {travelFinish} from "./travel-finish.js?v=11";
+import {travelFinish} from "./travel-finish.js?v=12";
 import {screenLessons} from "./screen-lessons.js";
 // Each Japanese utterance has a kana reading, Hepburn transcription and Chinese meaning.
 const phrase = (jp, kana, romaji, zh) => ({ jp, kana, romaji, zh });

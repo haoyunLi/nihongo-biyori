@@ -1,13 +1,13 @@
-import { reviewableBeats, rhythmCard, rhythmTypes } from "./rhythm-review.js?v=11";
+import { reviewableBeats, rhythmCard, rhythmTypes } from "./rhythm-review.js?v=12";
 import {
   dayLabel,
   localDay,
   readBook,
   scheduleRhythm,
   updateBook,
-} from "./recall.js?v=11";
+} from "./recall.js?v=12";
 import { moraLabels } from "./mora-groups.js";
-import { createTimingSession } from "./rhythm-client.js?v=11";
+import { createTimingSession } from "./rhythm-client.js?v=12";
 import { renderFeedback } from "./rhythm-feedback.js?v=8";
 import { createExcerptPlayer } from "./excerpt-player.js?v=10";
 

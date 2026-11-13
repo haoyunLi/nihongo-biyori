@@ -1,3 +1,4 @@
+import { createTalk, validTalk, talkLink } from "./talk-view.js";
 import {
   chapterIds,
   chapterOf,
@@ -9,16 +10,16 @@ import {
   counterLessonBlock,
   counterLessonLinks,
   validCounter,
-} from "./counter-view.js";
-import { questions } from "./question-bank.js?v=11";
+} from "./counter-view.js?v=12";
+import { questions } from "./question-bank.js?v=12";
 import { sources } from "./screen-lessons.js";
-import { tripTasks } from "./travel-finish.js?v=11";
-import { localDay, scheduleMistake, updateBook } from "./recall.js?v=11";
+import { tripTasks } from "./travel-finish.js?v=12";
+import { localDay, scheduleMistake, updateBook } from "./recall.js?v=12";
 import {
   activityTitles,
   createListening,
 } from "./listening-activities.js?v=10";
-import { createRecorder, recordingButton } from "./recording.js?v=11";
+import { createRecorder, recordingButton } from "./recording.js?v=12";
 import { contrastById } from "./contrast-data.js";
 import {
   contrastView,
@@ -26,9 +27,9 @@ import {
   handleContrast,
   stopContrast,
   leaveContrast,
-} from "./contrast-view.js?v=11";
-import { lessons, references } from "./lessons.js?v=11";
-import { createPractice } from "./practice.js?v=11";
+} from "./contrast-view.js?v=12";
+import { lessons, references } from "./lessons.js?v=12";
+import { createPractice } from "./practice.js?v=12";
 import { sceneById } from "./scenes.js";
 import { kanaRows, kanaNotes, extraKana } from "./kana.js";
 import { strokes } from "./strokes.js?v=3";
@@ -40,8 +41,8 @@ import {
   handleGuide,
   changeGuideRow,
   stopGuidePlayback,
-} from "./guide-view.js?v=11";
-import { speak, stopAudio } from "./audio.js?v=11";
+} from "./guide-view.js?v=12";
+import { speak, stopAudio } from "./audio.js?v=12";
 
 const tracks = [
   {
@@ -207,6 +208,7 @@ const counter = createCounter({
   noteMiss,
   slow: () => state.slow,
 });
+const talk = createTalk({ main, esc, speak, stopAudio });
 const mic = createRecorder({
   onRecordedClose: (action) => {
     if (action === "station-repeat" && location.hash === "#practice/platform")
@@ -769,7 +771,7 @@ function readerStage(l) {
         l.id +
         '">把本课用在情景里 →</a>'
       : '<a class="btn" href="#practice/daily">去今日复习 →</a>';
-    extra += counterLessonLinks(l.id);
+    extra += counterLessonLinks(l.id) + talkLink(l.id);
     if (l.id === "t02")
       extra +=
         '<a class="btn" href="#practice/platform">听站员回答，选站台 →</a>';
@@ -1325,6 +1327,9 @@ function go() {
     session.reviewIndex = 0;
     session.mistakeFilter = "";
   }
+  talk.enter(
+    route === "practice" && arg === "talk" && validTalk(num) ? num : undefined,
+  );
   counter.enter(
     route === "practice" && arg === "counter" && validCounter(num)
       ? num
@@ -1340,6 +1345,7 @@ function go() {
       Object.hasOwn(activityTitles, arg) ||
       arg === "daily" ||
       (arg === "counter" && validCounter(num)) ||
+      (arg === "talk" && validTalk(num)) ||
       (arg === "sounds" && (!num || contrastById.has(num))) ||
       (arg === "scene" && sceneById.has(num))
     )
@@ -1392,13 +1398,15 @@ function go() {
     kana: () => (arg ? guideView(arg, num, script, guideContext) : kanaView()),
     lesson: () => lessonView(currentLesson),
     practice: () =>
-      arg === "counter"
-        ? counter.view()
-        : arg === "sounds"
-          ? contrastView(num, guideContext)
-          : Object.hasOwn(activityTitles, arg)
-            ? listening.view(arg)
-            : practice.view(arg, num),
+      arg === "talk"
+        ? talk.view()
+        : arg === "counter"
+          ? counter.view()
+          : arg === "sounds"
+            ? contrastView(num, guideContext)
+            : Object.hasOwn(activityTitles, arg)
+              ? listening.view(arg)
+              : practice.view(arg, num),
     review: reviewView,
     about,
   };
@@ -1428,13 +1436,15 @@ function go() {
           : "五十音图",
       review: "复习手帖",
       practice:
-        arg === "counter"
-          ? "柜台换问法"
-          : arg === "sounds"
-            ? "相近音听辨"
-            : Object.hasOwn(activityTitles, arg)
-              ? activityTitles[arg]
-              : practice.title(arg, num),
+        arg === "talk"
+          ? "开口对话"
+          : arg === "counter"
+            ? "柜台换问法"
+            : arg === "sounds"
+              ? "相近音听辨"
+              : Object.hasOwn(activityTitles, arg)
+                ? activityTitles[arg]
+                : practice.title(arg, num),
       about: "教材与素材来源",
     }[route] ||
     "页面未找到";
@@ -1506,6 +1516,11 @@ main.addEventListener("change", (e) => {
   if (e.target.matches("[data-guide-select]")) changeGuideRow(e.target.value);
 });
 main.addEventListener("submit", (e) => {
+  if (e.target.matches("[data-talk-form]")) {
+    e.preventDefault();
+    talk.send();
+    return;
+  }
   if (e.target.matches("[data-recall-form]")) {
     e.preventDefault();
     practice.submit(e.target);
@@ -1543,6 +1558,11 @@ main.addEventListener("click", (e) => {
       .finally(() => {
         button.disabled = false;
       });
+    return;
+  }
+  if (action.startsWith("talk-")) {
+    e.preventDefault();
+    talk.handle(button);
     return;
   }
   if (action.startsWith("counter-")) {
@@ -1757,7 +1777,13 @@ window.addEventListener("focus", refreshChapterDay);
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) refreshChapterDay();
 });
-window.addEventListener("pagehide", silence);
+window.addEventListener("pagehide", () => {
+  silence();
+  talk.interrupt();
+});
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) talk.interrupt();
+});
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) practice.refreshDay();
 });

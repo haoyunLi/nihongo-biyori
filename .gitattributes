@@ -1,0 +1,2 @@
+# Preserve the exact third-party browser bundle and its upstream line endings.
+assets/asr/vosk-0.0.8.js binary

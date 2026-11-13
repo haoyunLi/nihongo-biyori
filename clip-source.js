@@ -1,5 +1,5 @@
 import { activityClips, activityReplies } from "./assets/audio/activities.js";
-import { clips, replyClips } from "./assets/audio/catalog.js?v=11";
+import { clips, replyClips } from "./assets/audio/catalog.js?v=12";
 
 import { contrastClips } from "./assets/audio/contrasts.js";
 

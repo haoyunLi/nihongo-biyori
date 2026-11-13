@@ -2344,3 +2344,18 @@ footer > div {
 .counter-lesson .tool { margin-top: .4rem; }
 
 .counter-page .practice-feature + h2 { margin-top: 1.5rem; }
+
+.talk-page .panel,.talk-page .practice-feature{margin-top:1.2rem}
+.talk-round h2{margin-bottom:.7rem}
+.talk-round .actions,.talk-page .panel>.actions{margin:1rem 0;gap:.55rem}
+.talk-response{margin:1.2rem 0;padding:1rem 0;border-block:1px solid var(--line)}
+.talk-response .actions{margin-top:0}
+.talk-response label{display:block;margin-bottom:.4rem;font-weight:600}
+.talk-send{display:flex;align-items:stretch;gap:.5rem;flex-wrap:wrap}
+.talk-send input{font:inherit;min-width:0;flex:1 1 13rem;padding:.65rem;color:var(--ink);border:1px solid var(--line);border-radius:.35rem;background:var(--paper)}
+.talk-example{margin:.65rem 0}
+.talk-example p,.talk-misses p{margin:.3rem 0}
+.talk-last,.talk-exit{padding:.6rem .85rem;background:var(--light);overflow-wrap:anywhere}
+.talk-misses{padding-inline-start:1.5rem}
+.talk-misses li{padding:.7rem 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+.talk-page .reading{line-height:1.6}
