@@ -1,7 +1,8 @@
-import { rhythmCard } from "./rhythm-review.js";
+import { questions } from "./question-bank.js";
+import { rhythmCard } from "./rhythm-review.js?v=10";
 import { contrasts } from "./contrast-data.js";
 import { kanaGuides } from "./kana-guides.js";
-import { lessons } from "./lessons.js";
+import { lessons } from "./lessons.js?v=10";
 
 const gaps = [1, 3, 7, 14, 30];
 export const dailyLimit = 5;
@@ -89,16 +90,18 @@ for (const lesson of lessons) {
     expression(item, lesson.id + ".d" + j, lesson.steps.length),
   );
   byLesson.set(lesson.id, studied);
-  lesson.quiz.forEach((q, i) =>
-    register({
-      id: "mistake:" + lesson.id + ":" + i,
-      kind: "mistake",
-      q,
-      label: lesson.title,
-      source: "#lesson/" + lesson.id + "/0",
-      signature: "quiz:" + lesson.id + ":" + i,
-    }),
-  );
+}
+for (const [key, q] of questions) {
+  // Kana, word and contrast cards already have their own recall modes.
+  if (recallCards.has(key)) continue;
+  register({
+    id: "mistake:" + key,
+    kind: "mistake",
+    q,
+    label: q.label,
+    source: q.source,
+    signature: "quiz:" + key,
+  });
 }
 
 export function localDay(date = new Date()) {
@@ -123,7 +126,7 @@ function eligible(state, history) {
   for (const id of state.done)
     for (const row of foundationRows[id] || []) rows.add(row);
   const lists = [
-    state.mistakes.map((k) => "mistake:" + k),
+    state.mistakes.map((k) => (recallCards.has(k) ? k : "mistake:" + k)),
     state.saved.map((k) => "say:" + k),
     [...rows].flatMap((k) => byRow.get(k) || []),
     state.done.flatMap((k) => byLesson.get(k) || []),
@@ -222,6 +225,15 @@ export function scheduleRhythm(book, entry, day) {
   register(card);
   if (book.history[card.id]?.due === day + 1) return false;
   book.history[card.id] = { rhythm: entry, level: 0, due: day + 1 };
+  return true;
+}
+
+export function scheduleMistake(book, key, day) {
+  const id = recallCards.has(key) ? key : "mistake:" + key;
+  if (!recallCards.has(id)) return false;
+  if (book.history[id]?.level === 0 && book.history[id].due === day + 1)
+    return false;
+  book.history[id] = { level: 0, due: day + 1 };
   return true;
 }
 

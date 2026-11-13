@@ -21,3 +21,5 @@
 给生成脚本的 `--recordings` 目录准备三组输入。将上述固定版 Kana Trainer 的 `data/audio/` 放入 `audio/`，将 Tofugu／WaniKani 仓库对应的 `lib/mp3/` 放入同名目录，另将青的原始 Ogg 放入 `commons/Ja-ao-blue.ogg`。两个 JSON 对照表都使用相对于这个目录的路径。用 `scripts/generate_audio.py --help` 可查看引擎及字典参数。
 
 站台回答、换词练习和两段原创动漫对话的新增音频沿用 VOICEVOX Nemo。两位朋友使用不同声线。
+
+新增影视短引和旅行章节的语音由 VOICEVOX Nemo 制作。作品短引的具体出处标在课内，示范使用教学配音。

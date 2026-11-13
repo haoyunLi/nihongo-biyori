@@ -1,5 +1,5 @@
 import { contrasts, contrastById, listeningRound } from "./contrast-data.js";
-import { speak } from "./audio.js?v=9";
+import { speak } from "./audio.js?v=10";
 
 let session,
   generation = 0,
@@ -152,7 +152,11 @@ export function handleContrast(button, ctx) {
       const truth = session.order[session.index],
         right = truth === choice;
       session.answers.push(right);
-      if (!right) ctx.flagMiss("contrast:" + pair.id + ":" + truth);
+      if (!right)
+        ctx.flagMiss(
+          "contrast:" + pair.id + ":" + truth,
+          pair.items[choice].jp + " · " + pair.items[choice].zh,
+        );
       draw(pair, ctx, '[data-action="contrast-next"]');
       break;
     }

@@ -2214,3 +2214,115 @@ footer > div {
     font-size: 18px;
   }
 }
+
+.chapter-home-link {
+  display: block;
+  width: fit-content;
+  margin-top: 12px;
+}
+.chapter-today {
+  padding: clamp(16px, 3vw, 28px);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--red);
+  background: var(--paper);
+  border-radius: 5px;
+}
+.chapter-today h2,
+.chapter-unit h2 {
+  font-family: var(--serif);
+}
+.chapter-today .actions,
+.mission .actions {
+  margin-top: 12px;
+}
+.chapter-unit {
+  margin: 30px 0;
+}
+.chapter-unit > p,
+.quote-source,
+.source-note {
+  color: var(--sage);
+  font-size: 14px;
+}
+.chapter-unit ol {
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+}
+.chapter-unit li {
+  position: relative;
+  border-bottom: 1px solid var(--line);
+  list-style: decimal inside;
+  margin-left: 0;
+  padding: 10px 5px 10px 10px;
+  font-variant-numeric: tabular-nums;
+}
+.chapter-unit li::marker {
+  color: var(--sage);
+  font-size: 14px;
+}
+.chapter-unit li a {
+  display: inline-flex;
+  width: calc(100% - 36px);
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  vertical-align: middle;
+  padding: 3px;
+}
+.chapter-unit li small,
+.reader-header > a {
+  font-size: 13px;
+}
+.chapter-unit li.up-next {
+  background: #e9eee4;
+  border-left: 3px solid #52735b;
+}
+.chapter-unit li.learned small {
+  color: #376045;
+}
+.reader-header > a {
+  display: inline-block;
+  margin-bottom: 6px;
+}
+.quote-source {
+  margin-bottom: 5px;
+}
+.quote-source a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.correction {
+  border-left: 3px solid #59785c;
+  padding: 9px 13px;
+  margin: 14px 0;
+  background: #ecf1e8;
+}
+.correction h3 {
+  margin: 0;
+}
+.fix-model {
+  margin: 8px 0;
+}
+.fix-model > span {
+  font-family: var(--serif);
+  font-size: clamp(18px, 3vw, 24px);
+  margin-right: 6px;
+}
+.fix-model p {
+  margin: 3px 0;
+  font-size: 14px;
+}
+.mistake-filter select {
+  min-height: 38px;
+  max-width: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  font: inherit;
+  padding: 4px 8px;
+}
+.mission > button {
+  margin: 8px 8px 0 0;
+}

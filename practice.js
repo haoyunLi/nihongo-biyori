@@ -11,9 +11,9 @@ import {
   recallCards,
   recordRating,
   updateBook,
-} from "./recall.js?v=9";
+} from "./recall.js?v=10";
 import { moraLabels } from "./mora-groups.js";
-import { rhythmTypes } from "./rhythm-review.js";
+import { rhythmTypes } from "./rhythm-review.js?v=10";
 import { scenes, sceneById, chunkReading } from "./scenes.js";
 
 const catalog = new Map();
@@ -127,7 +127,8 @@ export function createPractice(ctx) {
       return dialogAnswer(card) + "<p>" + ctx.esc(card.item.zh) + "</p>";
     if (card.kind === "mistake") {
       const q = card.q;
-      return `<p><strong>${ctx.esc(q.options[q.answer])}</strong></p><p>${ctx.esc(q.why)}</p>${q.listen ? ctx.soundButton(q.listen, "重听题目") : ""}`;
+      const say = q.model ? ctx.spokenModel(q.model) : "";
+      return `<p><strong>${ctx.esc(q.options[q.answer])}</strong></p><p>${ctx.esc(q.why)}</p>${say || (q.listen ? ctx.soundButton(q.listen, "重听题目") : "")}`;
     }
     const v = card.item;
     return `<div class="model-line"><strong lang="ja">${v.hira} ／ ${v.kata}</strong> ${ctx.soundButton(v.hira, "听假名原音")}</div><p>读作 <b>${v.romaji}</b>。</p>`;
@@ -416,7 +417,12 @@ export function createPractice(ctx) {
         redraw();
         return;
       }
-      if (action === "recall-choice") void rate(Number(index) === c.q.answer);
+      if (action === "recall-choice") {
+        const i = Number(index);
+        if (i !== c.q.answer)
+          ctx.noteMiss(c.id.replace(/^mistake:/, ""), c.q.options[i], false);
+        void rate(i === c.q.answer);
+      }
       if (action === "recall-forgot") void rate(false);
       if (action === "recall-rate") void rate(button.dataset.result === "ok");
       return;
@@ -471,7 +477,13 @@ export function createPractice(ctx) {
         s.checked =
           s.chosen.map((k) => s.bank[k]).join("") === choice.chunks.join("");
         s.error = !s.checked;
-        if (s.error) s.assisted = true;
+        if (s.error) {
+          s.assisted = true;
+          ctx.noteMiss(
+            "scene:" + scene.id + ":" + s.turn + ":" + s.choice,
+            s.chosen.map((i) => s.bank[i]).join("") || "空白",
+          );
+        }
         break;
       case "scene-next":
         if (!s.checked) return;
@@ -494,7 +506,8 @@ export function createPractice(ctx) {
     }
   }
   return {
-    flagMiss(id) {
+    flagMiss(id, choice) {
+      if (choice) ctx.noteMiss(id, choice, false);
       void updateBook(
         (book) => flagListeningMiss(book, id, localDay()),
         () => ctx.notify("本次复习记录暂时只保存在当前页面。"),

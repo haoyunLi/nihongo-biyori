@@ -1,8 +1,8 @@
 import { guideById, kanaGuides } from "./kana-guides.js";
 import { kanaNotes } from "./kana.js";
 import { strokes } from "./strokes.js?v=3";
-import { speak } from "./audio.js?v=9";
-import { humanKana, humanWords } from "./assets/audio/catalog.js?v=3";
+import { speak } from "./audio.js?v=10";
+import { humanKana, humanWords } from "./assets/audio/catalog.js?v=10";
 
 const stages = [
   ["listen", "听音与笔顺"],
@@ -604,6 +604,7 @@ export function handleGuide(button, ctx) {
           q.glyphs
             ? "kana:" + q.audio
             : "word:" + rowState.guide.id + ":" + q.audio,
+          q.glyphs ? asScript(rowState.answer) : rowState.answer,
         );
       redraw(
         ctx,

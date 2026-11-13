@@ -67,7 +67,8 @@ def lexical_input(text):
 def collect():
     js = """import {lessons} from './lessons.js';
     import {kanaGuides} from './kana-guides.js';
-    console.log(JSON.stringify({lessons, words:kanaGuides.flatMap(g=>g.words)}))"""
+    import {additionalSpeech} from './question-bank.js';
+    console.log(JSON.stringify({lessons, additionalSpeech, words:kanaGuides.flatMap(g=>g.words)}))"""
     command = ["node", "--no-warnings", "--experimental-default-type=module",
                "--input-type=module", "-e", js]
     course = json.loads(subprocess.check_output(command, cwd=ROOT))
@@ -84,6 +85,8 @@ def collect():
             if "listen" in quiz:
                 text = quiz["listen"]
                 phrases.setdefault(key(text), lexical_input(text))
+    for item in course["additionalSpeech"]:
+        phrases.setdefault(key(item["jp"]),item.get("spoken",lexical_input(item["jp"])))
     for ex in course["words"]:
         phrases.setdefault(key(ex["jp"]), lexical_input(ex["jp"]))
     return phrases, replies
@@ -188,15 +191,17 @@ def build(args):
     if args.activities_only:
         build_activities(synth)
         return
-    build_contrasts(synth)
+    if not args.missing_only:
+        build_contrasts(synth)
     if args.contrasts_only:
         return
     source = json.loads((ROOT/"scripts/kana-recordings.json").read_text())
-    kana_sources = {katakana(h):args.recordings/relative for h,relative in source.items()}
+    directory = args.recordings or Path(".")
+    kana_sources = {katakana(h):directory/relative for h,relative in source.items()}
     word_files = json.loads((ROOT/"scripts/word-recordings.json").read_text())
-    word_sources = {word:args.recordings/relative for word,relative in word_files.items()}
+    word_sources = {word:directory/relative for word,relative in word_files.items()}
     for path in [*kana_sources.values(), *word_sources.values()]:
-        if not path.is_file():
+        if not args.missing_only and not path.is_file():
             raise FileNotFoundError(f"Missing attributed recording: {path}")
     phrases, replies = collect()
     symbols = set(kana_clips().values())
@@ -214,7 +219,7 @@ def build(args):
             if name == "clips":
                 native_file = kana_sources.get(spoken) or word_sources.get(spoken.rstrip("。"))
 
-            if stem not in generated:
+            if stem not in generated and not (args.missing_only and path.is_file()):
                 samples,rate = human_take(native_file) if native_file else neural_take(synth,spoken,style,spoken in symbols)
                 encode(samples,rate,path)
                 generated.add(stem)
@@ -227,18 +232,20 @@ def build(args):
     pending = DEST/"catalog.tmp"
     pending.write_text("\n".join(parts)+"\n")
     pending.replace(DEST/"catalog.js")
-    build_activities(synth)
+    if not args.missing_only:
+        build_activities(synth)
     print(f"{len(generated)} MP3s, {len(used_human)} human kana, {len(replies)} learner replies")
 
 
 if __name__ == "__main__":
     parser=argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--missing-only", action="store_true", help="Add new lesson speech and refresh its catalogue, keeping existing clips.")
     parser.add_argument("--activities-only",action="store_true")
     parser.add_argument("--contrasts-only", action="store_true")
     parser.add_argument("--recordings", type=Path)
     for flag in ["runtime","dictionary","model"]:
         parser.add_argument("--"+flag,type=Path,required=True)
     args = parser.parse_args()
-    if not (args.contrasts_only or args.activities_only) and args.recordings is None:
+    if not (args.contrasts_only or args.activities_only or args.missing_only) and args.recordings is None:
         parser.error("--recordings is required for a full rebuild")
     build(args)

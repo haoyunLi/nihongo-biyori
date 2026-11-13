@@ -199,7 +199,15 @@ export function createListening(ctx) {
         current.showText = true;
         current.repeat = false;
         if (!current.wrong.length && !current.assisted) independent++;
-      } else current.wrong.push(i);
+      } else {
+        current.wrong.push(i);
+        ctx.noteMiss(
+          mode + ":" + order[round],
+          mode === "platform"
+            ? ["一号站台", "二号站台", "三号站台"][i]
+            : animeScenes[order[round]].options[i],
+        );
+      }
     } else if (action === "next") {
       round++;
       current = turn();

@@ -1,4 +1,4 @@
-import { clipStem } from "./clip-source.js?v=9";
+import { clipStem } from "./clip-source.js?v=10";
 import { makeGroups, moraLabels } from "./mora-groups.js";
 
 export const rhythmTypes = {
@@ -51,7 +51,7 @@ export async function reviewableBeats(target) {
     target.voice === "learner",
   );
   if (!stem) return [];
-  catalog ??= fetch(new URL("./assets/timing/plans.json?v=9", import.meta.url))
+  catalog ??= fetch(new URL("./assets/timing/plans.json?v=10", import.meta.url))
     .then((r) => {
       if (!r.ok) throw new Error("plans");
       return r.json();

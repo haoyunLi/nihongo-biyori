@@ -1,5 +1,18 @@
-import { activityTitles, createListening } from "./listening-activities.js";
-import { createRecorder, recordingButton } from "./recording.js?v=9";
+import {
+  chapterIds,
+  chapterOf,
+  dailyChapter,
+  routeView,
+} from "./chapter-path.js";
+import { questions } from "./question-bank.js";
+import { sources } from "./screen-lessons.js";
+import { tripTasks } from "./travel-finish.js";
+import { localDay, scheduleMistake, updateBook } from "./recall.js?v=10";
+import {
+  activityTitles,
+  createListening,
+} from "./listening-activities.js?v=10";
+import { createRecorder, recordingButton } from "./recording.js?v=10";
 import { contrastById } from "./contrast-data.js";
 import {
   contrastView,
@@ -7,9 +20,9 @@ import {
   handleContrast,
   stopContrast,
   leaveContrast,
-} from "./contrast-view.js?v=9";
-import { lessons, references } from "./lessons.js";
-import { createPractice } from "./practice.js?v=9";
+} from "./contrast-view.js?v=10";
+import { lessons, references } from "./lessons.js?v=10";
+import { createPractice } from "./practice.js?v=10";
 import { sceneById } from "./scenes.js";
 import { kanaRows, kanaNotes, extraKana } from "./kana.js";
 import { strokes } from "./strokes.js?v=3";
@@ -21,8 +34,8 @@ import {
   handleGuide,
   changeGuideRow,
   stopGuidePlayback,
-} from "./guide-view.js?v=9";
-import { speak, stopAudio } from "./audio.js?v=9";
+} from "./guide-view.js?v=10";
+import { speak, stopAudio } from "./audio.js?v=10";
 
 const tracks = [
   {
@@ -96,6 +109,9 @@ const defaults = {
   kanaBookmark: "",
   saved: [],
   mistakes: [],
+  mistakeNotes: {},
+  completionDays: {},
+  missionChecked: [],
   positions: {},
   last: "",
   slow: false,
@@ -108,6 +124,30 @@ try {
   for (const key of ["done", "saved", "mistakes", "kanaDone"])
     if (Array.isArray(data?.[key]))
       state[key] = [...new Set(data[key].filter((x) => typeof x === "string"))];
+  if (data?.completionDays)
+    for (const [id, day] of Object.entries(data.completionDays)) {
+      if (lessonById.has(id) && Number.isInteger(day))
+        state.completionDays[id] = day;
+    }
+  if (data?.mistakeNotes)
+    for (const [id, note] of Object.entries(data.mistakeNotes)) {
+      if (
+        questions.has(id) &&
+        state.mistakes.includes(id) &&
+        typeof note?.choice === "string"
+      )
+        state.mistakeNotes[id] = {
+          choice: note.choice.slice(0, 240),
+          count:
+            Number.isInteger(note.count) && note.count > 0 ? note.count : 1,
+        };
+    }
+  if (Array.isArray(data?.missionChecked))
+    state.missionChecked = [
+      ...new Set(
+        data.missionChecked.filter((i) => Number.isInteger(i) && tripTasks[i]),
+      ),
+    ];
   if (data?.positions && typeof data.positions === "object")
     state.positions = data.positions;
   for (const key of ["slow", "readings", "meanings"])
@@ -143,6 +183,7 @@ function save() {
 const main = document.querySelector("main");
 const recordButton = (options) => recordingButton(esc, options);
 const listening = createListening({
+  noteMiss,
   recordButton,
   soundButton,
   esc,
@@ -162,6 +203,8 @@ const mic = createRecorder({
   notify,
 });
 const practice = createPractice({
+  spokenModel,
+  noteMiss,
   recordButton,
   state,
   examples,
@@ -173,6 +216,7 @@ const practice = createPractice({
 });
 const session = {
   reviewTab: "saved",
+  mistakeFilter: "",
   reviewIndex: 0,
   flipped: false,
   reviewAnswer: null,
@@ -311,13 +355,9 @@ function courseArt(t) {
     "</p></div></a>"
   );
 }
-function nextLesson() {
-  if (state.last && !state.done.includes(state.last))
-    return lessonById.get(state.last);
-  return lessons.find((l) => !state.done.includes(l.id)) || lessons[0];
-}
 function home() {
-  const next = nextLesson();
+  const plan = dailyChapter(state.done, state.completionDays, localDay());
+  const next = lessonById.get(plan.next) || lessons[0];
   const daily = [
     { jp: "こんにちは。", zh: "你好。" },
     { jp: "すみません、駅はどこですか。", zh: "请问，车站在哪里？" },
@@ -330,20 +370,19 @@ function home() {
     Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86400000,
   );
   const today = daily[day % daily.length];
-  const label =
-    state.done.length === lessons.length
-      ? "重温第一课"
-      : state.last
-        ? "继续学习"
-        : "开始第一课";
+  const label = plan.today.length
+    ? "今天已学完 · 看章节"
+    : plan.complete
+      ? "重温每日章节"
+      : "今日第 " + chapterOf(next.id) + " 章 · " + next.title;
   return (
-    '<section class="hero"><div><h1>从零开始，<br>听懂日语。</h1><p>面向旅行与动漫爱好者的日语入门学习站，从假名、基础会话到实用场景，轻松迈出第一步。</p><a class="btn primary" href="' +
-    lessonURL(next.id, state.done.length === lessons.length ? 0 : undefined) +
+    '<section class="hero"><div><h1>从零开始，<br>听懂日语。</h1><p>四周，每天一章。从认假名，到点餐、问路，再到展会结交同好。最后用一次旅行实战把它们连起来。</p><a class="btn primary" href="' +
+    (plan.today.length || plan.complete ? "#chapters" : lessonURL(next.id)) +
     '">' +
     label +
     " " +
     ic("arrow") +
-    '</a></div><img class="hero-art" src="' +
+    '</a><a class="chapter-home-link text-link" href="#chapters">查看 28 章路线 →</a></div><img class="hero-art" src="' +
     imagePath("hero") +
     '" width="1800" height="666" fetchpriority="high" alt="朱红落日下，绿色电车沿着海岸驶向富士山"></section><section><div class="section-head"><h2>学习路线</h2></div><div class="routes">' +
     tracks.map(courseArt).join("") +
@@ -361,7 +400,7 @@ function courseView() {
   const t = tracks.find((t) => t.id === currentTrack);
   const group = lessons.filter((l) => l.track === t.id);
   return (
-    '<div class="inner"><h1>课程路线</h1><p class="lead">从左到右依次学习三个篇章，也可以直接进入眼下要用的场景。</p><div class="track-tabs" aria-label="选择篇章">' +
+    '<div class="inner"><h1>课程路线</h1><p class="lead">这里可以按主题选课。零基础建议从<a class="text-link" href="#chapters">四周每日章节</a>顺着学。</p><div class="track-tabs" aria-label="选择篇章">' +
     tracks
       .map(
         (item) =>
@@ -444,6 +483,15 @@ function row(item, key, dialogue = false) {
     (dialogue ? "line-row" : "example") +
     '"><div>' +
     (dialogue ? '<div class="speaker">' + esc(item.who) + "</div>" : "") +
+    (item.source
+      ? '<p class="quote-source">台词短引 · <a href="' +
+        sources[item.source].url +
+        '" target="_blank" rel="noopener noreferrer">' +
+        esc(sources[item.source].label) +
+        "</a></p>"
+      : currentLesson?.id.startsWith("m") && !dialogue
+        ? '<p class="quote-source">原创迁移例句</p>'
+        : "") +
     '<p class="jp-line" lang="ja">' +
     esc(item.jp) +
     "</p>" +
@@ -524,7 +572,11 @@ function moraDemo() {
   );
 }
 function stageTitles(lesson) {
-  return [...lesson.steps.map((s) => s.title), "情景对话", "随堂练习"];
+  return [
+    ...lesson.steps.map((s) => s.title),
+    lesson.mission ? "旅行实战" : "情景对话",
+    "随堂练习",
+  ];
 }
 function manageQuiz(l) {
   if (session.quiz !== l.id) {
@@ -589,7 +641,7 @@ function questionView(q, i, size, selected, review = false) {
 function quizStage(l) {
   manageQuiz(l);
   if (session.finished) {
-    const next = lessons[lessons.indexOf(l) + 1];
+    const next = lessonById.get(chapterIds[chapterOf(l.id)]);
     return (
       '<div class="panel"><p class="complete">' +
       ic("check") +
@@ -597,11 +649,11 @@ function quizStage(l) {
       esc(l.title) +
       "</h2><p>" +
       esc(l.goal) +
-      '</p><div class="actions" style="margin-top:16px">' +
+      '</p><div class="actions" style="margin-top:16px"><a class="btn primary" href="#chapters">回每日章节</a>' +
       (next
         ? '<a class="btn primary" href="' +
           lessonURL(next.id) +
-          '">学习下一课 ' +
+          '">提前学下一章 ' +
           ic("arrow") +
           "</a>"
         : '<a class="btn primary" href="#review">打开复习手帖</a>') +
@@ -612,6 +664,12 @@ function quizStage(l) {
   return (
     '<div class="panel">' +
     questionView(q, session.question, l.quiz.length, session.answer) +
+    (session.answer !== null && session.answer !== q.answer
+      ? correction(
+          questions.get(l.id + ":" + session.question),
+          l.id + ":" + session.question,
+        )
+      : "") +
     (session.answer === q.answer
       ? '<div class="actions" style="margin-top:15px"><button class="btn primary" data-action="advance">' +
         (session.question === l.quiz.length - 1 ? "完成本课" : "下一题") +
@@ -656,8 +714,38 @@ function lessonGuideLinks(id, n) {
     "</div></section>"
   );
 }
+function spokenModel(item) {
+  return (
+    '<div class="fix-model"><span lang="ja">' +
+    esc(item.jp) +
+    "</span>" +
+    soundButton(item.audio || item.jp, "听正确说法", item.kana, item.learner) +
+    recordButton({ ...item, compact: true }) +
+    '<p class="reading">' +
+    esc(item.kana || item.jp) +
+    " · " +
+    esc(item.zh) +
+    "</p></div>"
+  );
+}
+function missionView() {
+  const i = tripTasks.findIndex((_, i) => !state.missionChecked.includes(i));
+  if (i < 0)
+    return '<div class="panel"><h2>五个旅行任务已练完</h2><p>再做两道听说题，完成最后一章。也可以重新练这五个任务。</p><div class="actions"><a class="btn primary" href="#lesson/t09/4">进入结课练习</a><button class="tool" data-action="mission-reset">重练旅行实战</button></div></div>';
+  const t = tripTasks[i],
+    reveal = session.missionReveal === i;
+  return `<div class="panel mission"><p class="small-label">旅行实战 · ${i + 1} / ${tripTasks.length} · ${t.place}</p><h2>轮到你开口</h2><p>${esc(t.prompt)}</p>${t.cue ? '<button class="tool" data-action="mission-listen" data-index="' + i + '">' + (session.missionHeard === i ? "再听对方说话" : "先听对方说话") + "</button>" : ""}
+  ${reveal ? `<p>${t.tip}</p>${spokenModel(t.model)}${t.extra ? spokenModel(t.extra) : ""}<button class="btn primary" data-action="mission-check" data-index="${i}">已开口并核对，继续</button>` : '<button class="btn primary" data-action="mission-reveal" ' + (t.cue && session.missionHeard !== i ? "disabled" : "") + ">说完了，听参考说法</button>"}</div>`;
+}
 function readerStage(l) {
   const n = stageIndex;
+  if (
+    l.mission &&
+    (n === l.steps.length ||
+      (n === l.steps.length + 1 &&
+        state.missionChecked.length < tripTasks.length))
+  )
+    return missionView();
   if (n === l.steps.length + 1) {
     let extra = sceneById.has(l.id)
       ? '<a class="btn" href="#practice/scene/' +
@@ -689,6 +777,9 @@ function readerStage(l) {
       part.examples
         .map((item, e) => row(item, l.id + ".s" + n + "." + e))
         .join("");
+    if (part.examples.some((x) => x.source))
+      content +=
+        '<p class="source-note">短引按出处保留；发音是本站日语教学配音。后面的情境对话是原创练习。</p>';
     if (l.id === "f01") {
       if (n === 1 || n === 2) content += vowelDemo();
       if (n === l.steps.length - 1) content += moraDemo();
@@ -777,7 +868,9 @@ function lessonView(l) {
   return (
     '<div class="inner">' +
     crumb(t.name, "#courses/" + t.id, "课程") +
-    '<header class="reader-header"><h1>' +
+    '<header class="reader-header"><a class="text-link" href="#chapters">每日章节 · 第 ' +
+    chapterOf(l.id) +
+    " / 28 章</a><h1>" +
     esc(l.title) +
     '</h1><p class="lead">' +
     esc(l.goal) +
@@ -975,13 +1068,35 @@ function kanaView() {
   );
 }
 function validMistake(key) {
-  const [id, index] = key.split(":");
-  return lessonById.get(id)?.quiz[Number(index)];
+  return questions.get(key);
+}
+function noteMiss(key, choice, schedule = true) {
+  if (!questions.has(key)) return;
+  if (!state.mistakes.includes(key)) state.mistakes.push(key);
+  state.mistakeNotes[key] = {
+    choice: String(choice).slice(0, 240),
+    count: (state.mistakeNotes[key]?.count || 0) + 1,
+  };
+  save();
+  if (schedule)
+    void updateBook(
+      (book) => scheduleMistake(book, key, localDay()),
+      () => notify("本次错题复习安排暂时保存在当前页面。"),
+    );
+}
+function correction(q, key) {
+  const note = state.mistakeNotes[key];
+  return `<aside class="correction"><h3>这题怎么说</h3>${note ? "<p>上次答错时选的是「" + esc(note.choice) + "」。</p>" : ""}<p>正确答案：${esc(q.options[q.answer])}。</p>${spokenModel(q.model)}<a class="text-link" href="${q.source}">回到对应知识点 →</a></aside>`;
 }
 function reviewItems() {
   return session.reviewTab === "saved"
     ? state.saved.filter((key) => examples.has(key))
-    : state.mistakes.filter(validMistake);
+    : state.mistakes.filter(
+        (k) =>
+          validMistake(k) &&
+          (!session.mistakeFilter ||
+            validMistake(k).category === session.mistakeFilter),
+      );
 }
 function sourceLesson(key) {
   const [id, section] = key.split(".");
@@ -1000,7 +1115,7 @@ function reviewPanel() {
       "</h2><p>" +
       (saved
         ? "在课文或对话旁点星标，回到这里看日语、猜中文，再翻卡核对。"
-        : "随堂练习中答错的题会收在这里。重新答对一次，就可以从错题本移除。") +
+        : "章节、听辨和接话中答错的题会收在这里。重新作答、听对照、跟读后，可以标记掌握。") +
       '</p><p style="margin-top:15px"><a class="text-link" href="#courses">去课程路线 ' +
       ic("arrow") +
       "</a></p></div>"
@@ -1013,16 +1128,44 @@ function reviewPanel() {
     key = items[i];
   if (!saved) {
     const q = validMistake(key);
+    const types = [
+      ...new Set(
+        state.mistakes.map((k) => validMistake(k)?.category).filter(Boolean),
+      ),
+    ];
+    const filter =
+      '<label class="mistake-filter">按难点看 <select id="mistake-filter"><option value="">全部错题</option>' +
+      types
+        .map(
+          (c) =>
+            "<option " +
+            (session.mistakeFilter === c ? "selected" : "") +
+            ">" +
+            esc(c) +
+            "</option>",
+        )
+        .join("") +
+      "</select></label>";
     return (
       '<div class="panel review-card">' +
+      filter +
+      '<p class="small-label">' +
+      esc(q.label) +
+      " · " +
+      esc(q.category) +
+      (state.mistakeNotes[key]
+        ? " · 错过 " + state.mistakeNotes[key].count + " 次"
+        : "") +
+      "</p>" +
       questionView(q, i, items.length, session.reviewAnswer, true) +
+      (session.reviewAnswer !== null ? correction(q, key) : "") +
       '<div class="actions">' +
       (session.reviewAnswer === q.answer
         ? '<button class="btn primary" data-action="mastered">已掌握，移出错题本</button>'
         : "") +
       '<a class="text-link" href="' +
-      lessonURL(key.split(":")[0], 0) +
-      '">回看本课</a></div></div>' +
+      q.source +
+      '">回看原题</a></div></div>' +
       pager(items.length)
     );
   }
@@ -1072,7 +1215,7 @@ function reviewView() {
     " / " +
     lessons.length +
     "</p>" +
-    practice.entry() +
+    (session.reviewTab === "mistakes" ? "" : practice.entry()) +
     '<div class="toolbar review-tabs">' +
     [
       ["saved", "收藏表达", state.saved.filter((k) => examples.has(k)).length],
@@ -1100,8 +1243,15 @@ function reviewView() {
 }
 function about() {
   return (
-    '<div class="inner narrow"><h1>教材与素材来源</h1><p class="lead">日和手帖为中文零基础学习者编写。课程采用原创中文讲解、例句、情景对话和练习题。以下官方资源可供延伸学习。</p><div class="bibliography">' +
-    references
+    '<div class="inner narrow"><h1>教材与素材来源</h1><p class="lead">日和手帖为中文零基础学习者编写。课内的作品短引逐条列出出处；讲解、迁移例句、情景对话和练习题由本站编写。以下官方资源可供延伸学习。</p><div class="bibliography">' +
+    [
+      ...Object.values(sources).map((s) => ({
+        name: s.label,
+        url: s.url,
+        note: "课内短引的文字出处。",
+      })),
+      ...references,
+    ]
       .map(
         (r) =>
           '<article><h3><a href="' +
@@ -1150,6 +1300,12 @@ function go() {
   mic.close();
   const [raw, arg, num, script] = location.hash.slice(1).split("/");
   route = raw || "home";
+  if (route === "review" && arg === "mistakes") {
+    session.reviewTab = "mistakes";
+    session.reviewAnswer = null;
+    session.reviewIndex = 0;
+    session.mistakeFilter = "";
+  }
   listening.leave(route === "practice" ? arg : null);
   if (route !== "practice" || arg !== "sounds") leaveContrast();
   if (route !== "practice" || arg !== "daily") practice.leaveDaily();
@@ -1206,6 +1362,7 @@ function go() {
   currentTrack = tracks.some((t) => t.id === arg) ? arg : "foundations";
   const view = {
     home,
+    chapters: () => routeView(lessonById, state, localDay()),
     courses: courseView,
     kana: () => (arg ? guideView(arg, num, script, guideContext) : kanaView()),
     lesson: () => lessonView(currentLesson),
@@ -1222,15 +1379,21 @@ function go() {
     ? view[route]()
     : '<div class="inner"><h1>没有找到这一页</h1><p class="lead"><a class="text-link" href="#home">返回学习首页</a></p></div>';
   const active =
-    route === "lesson" ? "courses" : route === "practice" ? "review" : route;
+    route === "lesson" || route === "chapters"
+      ? "chapters"
+      : route === "practice"
+        ? "review"
+        : route;
   document.querySelectorAll("nav a").forEach((a) => {
-    if (a.hash === "#" + active) a.setAttribute("aria-current", "page");
+    if (a.hash === "#" + (active === "courses" ? "chapters" : active))
+      a.setAttribute("aria-current", "page");
     else a.removeAttribute("aria-current");
   });
   const title =
     currentLesson?.title ||
     {
       home: "从零开始学日语",
+      chapters: "每日章节",
       courses: "课程路线",
       kana:
         arg && guideById.has(arg)
@@ -1276,15 +1439,13 @@ function markAnswer(index, review) {
     : l.id + ":" + session.question;
   const q = review ? validMistake(key) : l.quiz[session.question];
   if (!q || index < 0 || index >= q.options.length) return;
+  if (index !== q.answer) noteMiss(key, q.options[index]);
   if (review) {
     session.reviewAnswer = index;
     rerenderReview();
   } else {
     session.answer = index;
-    if (index !== q.answer && !state.mistakes.includes(key)) {
-      state.mistakes.push(key);
-      save();
-    }
+
     rerenderStage();
   }
   main
@@ -1321,10 +1482,40 @@ main.addEventListener("submit", (e) => {
     practice.submit(e.target);
   }
 });
+main.addEventListener("change", (e) => {
+  if (e.target.id === "mistake-filter") {
+    session.mistakeFilter = e.target.value;
+    session.reviewAnswer = null;
+    session.reviewIndex = 0;
+    rerenderReview();
+    main.querySelector("#mistake-filter")?.focus();
+  }
+});
 main.addEventListener("click", (e) => {
   const button = e.target.closest("button[data-action]");
   if (!button) return;
   const { action, key } = button.dataset;
+  if (action === "mission-listen") {
+    const i = Number(button.dataset.index),
+      t = tripTasks[i];
+    if (!t?.cue) return;
+    silence();
+    const epoch = audioEpoch;
+    button.disabled = true;
+    speak(t.cue.jp, state.slow, t.cue.kana)
+      .then(() => {
+        if (epoch !== audioEpoch || !button.isConnected) return;
+        session.missionHeard = i;
+        rerenderStage();
+      })
+      .catch((e) => {
+        if (epoch === audioEpoch) notify(e.message);
+      })
+      .finally(() => {
+        button.disabled = false;
+      });
+    return;
+  }
   if (action === "record-open") {
     mic.open(button);
     return;
@@ -1424,8 +1615,10 @@ main.addEventListener("click", (e) => {
       if (session.answer !== currentLesson.quiz[session.question].answer) break;
       if (session.question === currentLesson.quiz.length - 1) {
         session.finished = true;
-        if (!state.done.includes(currentLesson.id))
+        if (!state.done.includes(currentLesson.id)) {
           state.done.push(currentLesson.id);
+          state.completionDays[currentLesson.id] = localDay();
+        }
         save();
       } else session.question++;
       session.answer = null;
@@ -1435,6 +1628,39 @@ main.addEventListener("click", (e) => {
       session.quiz = null;
       rerenderStage();
       break;
+    case "mission-reveal":
+      session.missionReveal = tripTasks.findIndex(
+        (_, i) => !state.missionChecked.includes(i),
+      );
+      rerenderStage();
+      break;
+    case "mission-reset":
+      state.missionChecked = [];
+      session.missionReveal = null;
+      session.missionHeard = null;
+      save();
+      rerenderStage();
+      break;
+    case "mission-check": {
+      const i = Number(button.dataset.index);
+      if (
+        currentLesson?.mission &&
+        i === session.missionReveal &&
+        !state.missionChecked.includes(i)
+      ) {
+        state.missionChecked.push(i);
+        session.missionReveal = null;
+        session.missionHeard = null;
+        save();
+        if (state.missionChecked.length === tripTasks.length)
+          location.hash = lessonURL(
+            currentLesson.id,
+            currentLesson.steps.length + 1,
+          );
+        rerenderStage();
+      }
+      break;
+    }
     case "review-tab":
       Object.assign(session, {
         reviewTab: button.dataset.type,
@@ -1467,6 +1693,13 @@ main.addEventListener("click", (e) => {
       const entry = reviewItems()[session.reviewIndex];
       if (session.reviewAnswer !== validMistake(entry)?.answer) break;
       state.mistakes = removeEntry(state.mistakes, entry);
+      delete state.mistakeNotes[entry];
+      if (
+        !state.mistakes.some(
+          (k) => validMistake(k)?.category === session.mistakeFilter,
+        )
+      )
+        session.mistakeFilter = "";
       session.reviewAnswer = null;
       save();
       rerenderReview();
@@ -1477,6 +1710,19 @@ main.addEventListener("click", (e) => {
 document.querySelector(".skip").addEventListener("click", (e) => {
   e.preventDefault();
   main.focus();
+});
+let displayedDay = localDay();
+function refreshChapterDay() {
+  const day = localDay();
+  if (day === displayedDay) return;
+  displayedDay = day;
+  if (route === "home" || route === "chapters")
+    main.innerHTML =
+      route === "home" ? home() : routeView(lessonById, state, day);
+}
+window.addEventListener("focus", refreshChapterDay);
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) refreshChapterDay();
 });
 window.addEventListener("pagehide", silence);
 document.addEventListener("visibilitychange", () => {
