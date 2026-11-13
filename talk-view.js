@@ -1,12 +1,17 @@
-import { talks } from "./talk-data.js";
+import { talks } from "./talk-data.js?v=13";
 import {
   interpret,
   makeRun,
   finishTurn,
   needsPractice,
-} from "./talk-engine.js";
-import { createSpeechModel, microphone, voiceAvailable } from "./talk-voice.js";
+} from "./talk-engine.js?v=13";
+import {
+  createSpeechModel,
+  createConversationMic,
+  voiceAvailable,
+} from "./talk-voice.js?v=13";
 
+import { canAutoReply } from "./talk-turn.js";
 const route = (id) => "#practice/talk" + (id ? "/" + id : "");
 const storage = "nihongo-biyori-dialogue-review-v1";
 const names = {
@@ -29,8 +34,7 @@ const lessonScene = {
   m03: "friends",
   m04: "friends",
 };
-export function talkLink(id) {
-  const scene = lessonScene[id];
+export function talkLink(id, scene = lessonScene[id]) {
   return scene
     ? `<a class="tool" href="${route(scene)}">开口对话 · ${talks[scene].title} →</a>`
     : "";
@@ -59,6 +63,10 @@ const button = (a, label, main = false, disabled = false) =>
   `<button type="button" class="${main ? "btn primary" : "tool"}" data-action="talk-${a}" ${disabled ? "disabled" : ""}>${label}</button>`;
 export function createTalk(ctx) {
   const modelStore = createSpeechModel();
+  const mic = createConversationMic(modelStore);
+  let continuous = false,
+    confirming = false,
+    preferredAuto = false;
   let scene,
     run,
     previous = [],
@@ -87,8 +95,14 @@ export function createTalk(ctx) {
     ctx.stopAudio();
     phase = "";
   }
+  function endVoice() {
+    continuous = false;
+    confirming = false;
+    mic.close();
+  }
   function leave() {
     stop();
+    endVoice();
     modelStore.release();
     run = null;
     scene = null;
@@ -96,6 +110,7 @@ export function createTalk(ctx) {
   function enter(id) {
     leave();
     scene = id;
+    preferredAuto = false;
     if (id) previous = saved(id);
     memoryNote = "";
   }
@@ -106,6 +121,7 @@ export function createTalk(ctx) {
     notice = "";
     attempt = "";
     captured = false;
+    confirming = false;
     hint = false;
     showLine = false;
     models = false;
@@ -137,8 +153,12 @@ export function createTalk(ctx) {
       memoryNote = "这次的待练句保存在当前页面。";
     }
   }
-  function start(items = null) {
+  function start(items = null, auto = false) {
     stop();
+    endVoice();
+    continuous = auto && voiceAvailable();
+    preferredAuto = continuous;
+    if (continuous) mic.unlock();
     run = makeRun(scene, items);
     clearTurn();
     lastTurn = null;
@@ -146,25 +166,44 @@ export function createTalk(ctx) {
     refresh();
     void play(clip);
   }
-  async function play(lines, slow = false) {
+  async function play(lines, slow = false, listenAfter = true) {
     sync();
     stop();
     const ticket = epoch;
     phase = "playing";
+    let played = false;
     refresh();
     try {
       for (const line of lines) {
         if (ticket !== epoch) return;
         await ctx.speak(line.jp, slow, line.kana);
       }
-      if (ticket === epoch) heard = true;
+      if (ticket === epoch) {
+        heard = true;
+        played = true;
+      }
     } catch (e) {
-      if (ticket === epoch) notice = "声音未能播放。可以重听或展开原句继续。";
+      if (ticket === epoch) {
+        endVoice();
+        notice = "声音未能播放。可以重听或展开原句继续。";
+      }
     } finally {
       if (ticket === epoch) {
         sync();
         phase = "";
-        refresh();
+        if (
+          played &&
+          continuous &&
+          listenAfter &&
+          !confirming &&
+          run &&
+          !run.done &&
+          !document.hidden
+        ) {
+          // Let the last sound from a loudspeaker die out before unmuting.
+          await new Promise((resolve) => setTimeout(resolve, 270));
+          if (ticket === epoch && !document.hidden && continuous) record();
+        } else refresh();
       }
     }
   }
@@ -175,22 +214,35 @@ export function createTalk(ctx) {
     notice = "";
     phase = "loading";
     refresh();
-    capture = microphone(modelStore, {
+    confirming = false;
+    capture = mic.listen({
+      automatic: continuous,
       status(value) {
         if (ticket === epoch) {
           phase = value;
           refresh();
         }
       },
-      complete(value) {
+      complete(result, reason) {
+        const value = result.text;
         if (ticket !== epoch) return;
         capture = null;
         phase = "";
+        if (continuous) {
+          const intent = interpret(scene, run.node, value);
+          if (canAutoReply(result, intent, reason)) {
+            accept(value, intent);
+            return;
+          }
+          confirming = true;
+        } else mic.close();
         draft = value;
         captured = !!value;
         typed = true;
         notice = value
-          ? "核对听写后发送。识别有误可以直接改字。"
+          ? continuous
+            ? "这句需要核对。确认文字或改字后发送，也可以重说本句。"
+            : "核对听写后发送。识别有误可以直接改字。"
           : "没有听清声音。这次不记作没接上，可以重说或输入日语。";
         refresh(
           value ? '[data-action="talk-send"]' : '[data-action="talk-record"]',
@@ -200,6 +252,7 @@ export function createTalk(ctx) {
         if (ticket !== epoch) return;
         capture = null;
         phase = "";
+        endVoice();
         typed = true;
         notice = message;
         refresh("[data-talk-draft]");
@@ -215,6 +268,7 @@ export function createTalk(ctx) {
     clearTurn();
     clip = [...result.replies];
     if (run.done) {
+      endVoice();
       if (run.items) clip = [];
       saveReview();
       refresh();
@@ -236,6 +290,10 @@ export function createTalk(ctx) {
     }
     const raw = draft.trim().slice(0, 160),
       result = interpret(scene, run.node, raw);
+    accept(raw, result);
+  }
+  function accept(raw, result) {
+    confirming = false;
     if (result.kind === "ok") {
       advance(result, { text: raw });
       return;
@@ -252,6 +310,7 @@ export function createTalk(ctx) {
       return;
     }
     stop();
+    confirming = continuous;
     run.support.add("unclear");
     attempt = raw;
     notice =
@@ -273,7 +332,7 @@ export function createTalk(ctx) {
   }
   function intro() {
     const s = talks[scene];
-    return `<h1>${s.title}</h1><p class="lead">${s.intro}</p><section class="practice-feature"><h2>你来接话</h2><p>先听，再开口。确认听写后发送，${s.role}会跟着你的选择继续聊。</p><div class="actions">${button("start", "开始，听对方说", true)}${previous.length ? button("retry", "只重练上次卡住的 " + previous.length + " 句") : ""}</div></section><p class="reading">首次开麦会下载约 55 MB 的日语识别工具。声音和听写在本机处理。也可以直接输入日语走同一段对话。</p>`;
+    return `<h1>${s.title}</h1><p class="lead">${s.intro}</p><section class="practice-feature"><h2>你来接话</h2><p>听完直接说，句末停约一秒半。${s.role}会接着问，没听清时再核对。</p><div class="actions">${voiceAvailable() ? button("auto", "开启连续对话", true) : ""}${button("start", "逐句练习或输入日语", !voiceAvailable())}${previous.length ? button("retry", "只重练上次卡住的 " + previous.length + " 句") : ""}</div></section><p class="reading">首次开麦会下载约 55 MB 的日语识别工具。声音和听写在本机处理。也可以直接输入日语走同一段对话。</p>`;
   }
   function summary() {
     const missed = needsPractice(run.records),
@@ -302,20 +361,37 @@ export function createTalk(ctx) {
         {
           loading: "正在载入本机日语识别工具…",
           permission: "请允许浏览器使用麦克风。",
-          listening: "正在听你说日语…",
+          listening: continuous
+            ? "轮到你，直接说日语。句末停约一秒半即可。"
+            : "正在听你说日语…",
           decoding: "正在本机整理听写…",
           playing: "对方正在说话…",
         }[phase] || "";
+    const voiceButtons = continuous
+      ? (confirming ? button("again", "重说本句", true) : "") +
+        button("pause", "暂停连续对话")
+      : (phase === "listening"
+          ? button("finish", "说完了，查看听写", true)
+          : button(
+              "record",
+              captured ? "重新开口" : "开口回答",
+              true,
+              b || !voiceAvailable(),
+            )) +
+        (b
+          ? button("cancel", "取消这次录音")
+          : button("type", typed ? "重新输入日语" : "用日语输入")) +
+        (!b && voiceAvailable() ? button("resume", "继续免按对话") : "");
     const promptLine = showLine ? optLine(n.prompt) : "";
     const idx = run.items
       ? `重练 ${run.index + 1} / ${run.items.length}`
       : `对话 · 第 ${run.index + 1} 轮`;
     return `<h1>${talks[scene].title}</h1><section class="panel talk-round"><p class="small-label">${idx} · ${talks[scene].role}</p><h2>听完，用日语接话</h2>${lastTurn?.skipped && !run.items ? `<p class="talk-last">这句先跳过，情景按「${ctx.esc(lastTurn.model)}」继续。</p>` : lastTurn?.text && !run.items ? `<p class="talk-last">你刚才说　<span lang="ja">${ctx.esc(lastTurn.text)}</span></p>` : ""}
-   <div class="actions">${button("listen", phase === "playing" ? "重新播放" : heard ? "再听问题" : "听对方说", false, b)}${button("line", "看原句和中文", false, b || showLine)}</div>${promptLine}
-   <div class="talk-response"><div class="actions">${phase === "listening" ? button("finish", "说完了，查看听写", true) : button("record", captured ? "重新开口" : "开口回答", true, b || !voiceAvailable())}${b ? button("cancel", "取消这次录音") : button("type", typed ? "重新输入日语" : "用日语输入")}</div>
-   <p class="reading" role="status" aria-live="polite">${ctx.esc(status || notice || (!voiceAvailable() ? "当前环境无法开麦，可以直接输入日语。" : "开口后点「说完了」核对听写。每次最多 18 秒。"))}</p>
-   ${typed && !b ? `<form data-talk-form><label for="talk-draft">${captured ? "听写结果，可改字" : "你的日语回答"}</label><div class="talk-send"><input id="talk-draft" data-talk-draft lang="ja" maxlength="160" autocomplete="off" value="${ctx.esc(draft)}"><button class="btn primary" data-action="talk-send" type="submit">发送给${talks[scene].role}</button></div></form>` : ""}</div>
-   <div class="actions">${button("hint", "卡住了，给个提示", false, b || hint)}${button("skip", "这句先跳过", false, b)}</div>
+   <div class="actions">${button("listen", phase === "playing" ? "重新播放" : heard ? "再听问题" : "听对方说", false, b)}${button("line", "看原句和中文", false, (!continuous && b) || showLine)}</div>${promptLine}
+   <div class="talk-response"><div class="actions">${voiceButtons}</div>
+   <p class="reading" role="status" aria-live="polite">${ctx.esc(status || notice || (!voiceAvailable() ? "当前环境无法开麦，可以直接输入日语。" : "也可以切到连续对话，说完停一下就能接着聊。"))}</p>
+   ${typed && !b ? `<form data-talk-form><label for="talk-draft">${captured ? "听写结果，可改字" : "你的日语回答"}</label><div class="talk-send"><input id="talk-draft" data-talk-draft lang="ja" maxlength="160" autocomplete="off" value="${ctx.esc(draft)}"><button class="btn primary" data-action="talk-send" type="submit">${confirming ? "确认并接着聊" : "发送给" + talks[scene].role}</button></div></form>` : ""}</div>
+   <div class="actions">${button("hint", "卡住了，给个提示", false, (!continuous && b) || hint)}${button("skip", "这句先跳过", false, b)}</div>
    ${
      hint
        ? `<aside class="counter-hint"><p>${ctx.esc(n.hint)}</p>${button("examples", "再看参考说法", false, models || b)}${
@@ -341,23 +417,45 @@ export function createTalk(ctx) {
   function handle(b) {
     const a = b.dataset.action.slice(5);
     sync();
-    if (a === "start") {
-      start();
+    if (a === "start" || a === "auto") {
+      start(null, a === "auto");
       return;
     }
     if (a === "retry" && previous.length) {
-      start([...previous]);
+      start([...previous], preferredAuto);
       return;
     }
     if (!run) return;
+    if (a === "pause") {
+      stop();
+      endVoice();
+      typed = true;
+      notice = "连续对话已暂停，可以输入或继续开口。";
+      refresh();
+      return;
+    }
     if (a === "listen") {
       void play(run.done ? clip : [getNode().prompt]);
       return;
     }
     if (run.done) return;
     const n = getNode();
+    if (a === "again" || a === "resume") {
+      preferredAuto = true;
+      continuous = true;
+      confirming = false;
+      typed = false;
+      record();
+      return;
+    }
+    if (continuous && ["hint", "line", "examples", "model"].includes(a)) {
+      stop();
+      endVoice();
+      notice = "已暂停收音。准备好后可继续免按对话。";
+    }
     if (a === "cancel") {
       stop();
+      endVoice();
       typed = true;
       notice = "录音已取消。可以重新开口或输入日语。";
       refresh();
@@ -378,6 +476,7 @@ export function createTalk(ctx) {
     }
     if (a === "type") {
       stop();
+      endVoice();
       typed = true;
       refresh("[data-talk-draft]");
       return;
@@ -416,8 +515,9 @@ export function createTalk(ctx) {
   function interrupt() {
     if (!scene || !run) return;
     sync();
-    const wasBusy = busy();
+    const wasBusy = busy() || continuous;
     stop();
+    endVoice();
     if (wasBusy) {
       notice = "已停止录音。回到页面后可重新开口。";
       typed = true;

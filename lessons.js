@@ -1,6 +1,7 @@
+import {extensionLessons} from "./daily-extension.js";
 import {addCounterChecks} from "./counter-data.js";
 import {addBridges} from "./chapter-bridges.js";
-import {travelFinish} from "./travel-finish.js?v=12";
+import {travelFinish} from "./travel-finish.js?v=13";
 import {screenLessons} from "./screen-lessons.js";
 // Each Japanese utterance has a kana reading, Hepburn transcription and Chinese meaning.
 const phrase = (jp, kana, romaji, zh) => ({ jp, kana, romaji, zh });
@@ -1681,6 +1682,14 @@ lessons.push(
   },
 );
 
-lessons.push(...screenLessons,...travelFinish);
+lessons.push(...screenLessons,...travelFinish,...extensionLessons);
 addBridges(lessons);
 addCounterChecks(lessons);
+
+
+// Learning steps, dialogue and retrieval each get a share of one day's practice.
+for (const lesson of lessons) {
+  lesson.stageMinutes = lesson.steps.map((_,i)=>lesson.steps.length===2 || (lesson.steps.length===3 && i===2 && !lesson.mission) ? 3 : 2);
+  lesson.stageMinutes.push(lesson.mission ? 6 : 3, lesson.mission ? 3 : 2);
+  lesson.minutes = lesson.stageMinutes.reduce((sum,n)=>sum+n,0);
+}

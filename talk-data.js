@@ -1,3 +1,4 @@
+import {travelTalks} from "./travel-talks.js";
 // An edge is a meaning the partner can respond to, with a natural short model.
 // The recognizer transcribes freely. These patterns interpret only this scene.
 const L = (jp, kana, zh) => ({ jp, kana, zh });
@@ -699,6 +700,7 @@ export const talks = {
       "在动漫活动上认识一位同好。聊动画、漫画或游戏，再决定要不要一起去咖啡馆。",
     nodes: friends,
   },
+  ...travelTalks(L,turn,edge),
 };
 export const repeatLine = L(
   "もう一度お願いします。",

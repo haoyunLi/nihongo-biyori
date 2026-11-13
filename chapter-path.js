@@ -20,6 +20,16 @@ export const units = [
     skill: "买票、选周边、问能否拍照，听懂婉拒，最后把整天的需求用日语说出来。",
     ids: ["c02", "c03", "c04", "m04", "c05", "t06", "t09"],
   },
+  {
+    title: "第五周 · 住下来，走到想去的地方",
+    skill: "把入住、街头问路和便利店分别拆成几天练，周末再试一次请人指地图。",
+    ids: ["x01", "x02", "x03", "x04", "x05", "x06", "x07"],
+  },
+  {
+    title: "第六周 · 找回物品，去展会见朋友",
+    skill: "从描述遗失物开始，到买票、出示预约、约见面，最后试着主动追问。",
+    ids: ["x08", "x09", "x10", "x11", "x12", "x13", "x14"],
+  },
 ];
 export const chapterIds = units.flatMap((u) => u.ids);
 export const chapterOf = (id) => chapterIds.indexOf(id) + 1;
@@ -42,11 +52,11 @@ export function routeView(ctx, state, day) {
   const ordinal = (id) => "第 " + chapterOf(id) + " 章";
   const nextLesson = ctx.get(next);
   const lead = complete
-    ? "28 章已学完"
+    ? chapterIds.length + " 章已学完"
     : today.length
       ? "今日目标已完成"
       : "今日一章";
-  return `<div class="inner narrow chapter-route"><h1>每日章节</h1><p class="lead">按顺序每天学一章。隔天从上次的位置接着走，也可以点任意一章提前学。<a class="text-link" href="#courses">按主题找课</a></p>
+  return `<div class="inner narrow chapter-route"><h1>每日章节</h1><p class="lead">每天约 10–15 分钟，学一章。隔天从上次的位置接着走，也可以点任意一章提前学。<a class="text-link" href="#courses">按主题找课</a></p>
     <section class="chapter-today"><span class="small-label">${lead}</span><h2>${today.length ? today.map((id) => ordinal(id)).join("、") + " 已完成" : complete ? "把学过的日语用起来" : ordinal(next) + " · " + nextLesson.title}</h2>
     <p>${complete || today.length ? "先到今日复习重练到期的题。" : nextLesson.goal}</p><div class="actions">${today.length || complete ? '<a class="btn primary" href="#practice/daily">去今日复习</a>' : link(next, state.positions[next] ? "继续本章" : "开始本章")}${today.length && next ? link(next, "提前学下一章", "tool") : ""}<a class="tool" href="#review/mistakes">打开错题本</a></div></section>
     ${units

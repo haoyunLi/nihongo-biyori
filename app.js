@@ -1,25 +1,25 @@
-import { createTalk, validTalk, talkLink } from "./talk-view.js";
+import { createTalk, validTalk, talkLink } from "./talk-view.js?v=13";
 import {
   chapterIds,
   chapterOf,
   dailyChapter,
   routeView,
-} from "./chapter-path.js";
+} from "./chapter-path.js?v=13";
 import {
   createCounter,
   counterLessonBlock,
   counterLessonLinks,
   validCounter,
-} from "./counter-view.js?v=12";
-import { questions } from "./question-bank.js?v=12";
+} from "./counter-view.js?v=13";
+import { questions } from "./question-bank.js?v=13";
 import { sources } from "./screen-lessons.js";
-import { tripTasks } from "./travel-finish.js?v=12";
-import { localDay, scheduleMistake, updateBook } from "./recall.js?v=12";
+import { tripTasks } from "./travel-finish.js?v=13";
+import { localDay, scheduleMistake, updateBook } from "./recall.js?v=13";
 import {
   activityTitles,
   createListening,
 } from "./listening-activities.js?v=10";
-import { createRecorder, recordingButton } from "./recording.js?v=12";
+import { createRecorder, recordingButton } from "./recording.js?v=13";
 import { contrastById } from "./contrast-data.js";
 import {
   contrastView,
@@ -27,9 +27,9 @@ import {
   handleContrast,
   stopContrast,
   leaveContrast,
-} from "./contrast-view.js?v=12";
-import { lessons, references } from "./lessons.js?v=12";
-import { createPractice } from "./practice.js?v=12";
+} from "./contrast-view.js?v=13";
+import { lessons, references } from "./lessons.js?v=13";
+import { createPractice } from "./practice.js?v=13";
 import { sceneById } from "./scenes.js";
 import { kanaRows, kanaNotes, extraKana } from "./kana.js";
 import { strokes } from "./strokes.js?v=3";
@@ -41,8 +41,8 @@ import {
   handleGuide,
   changeGuideRow,
   stopGuidePlayback,
-} from "./guide-view.js?v=12";
-import { speak, stopAudio } from "./audio.js?v=12";
+} from "./guide-view.js?v=13";
+import { speak, stopAudio } from "./audio.js?v=13";
 
 const tracks = [
   {
@@ -395,13 +395,13 @@ function home() {
       ? "重温每日章节"
       : "今日第 " + chapterOf(next.id) + " 章 · " + next.title;
   return (
-    '<section class="hero"><div><h1>从零开始，<br>听懂日语。</h1><p>四周，每天一章。从认假名，到点餐、问路，再到展会结交同好。最后用一次旅行实战把它们连起来。</p><a class="btn primary" href="' +
+    '<section class="hero"><div><h1>从零开始，<br>听懂日语。</h1><p>六周，每天约 10–15 分钟。从假名和午餐点单开始，一步步练到入住、问路和约朋友见面。</p><a class="btn primary" href="' +
     (plan.today.length || plan.complete ? "#chapters" : lessonURL(next.id)) +
     '">' +
     label +
     " " +
     ic("arrow") +
-    '</a><a class="chapter-home-link text-link" href="#chapters">查看 28 章路线 →</a></div><img class="hero-art" src="' +
+    '</a><a class="chapter-home-link text-link" href="#chapters">查看 42 章路线 →</a></div><img class="hero-art" src="' +
     imagePath("hero") +
     '" width="1800" height="666" fetchpriority="high" alt="朱红落日下，绿色电车沿着海岸驶向富士山"></section><section><div class="section-head"><h2>学习路线</h2></div><div class="routes">' +
     tracks.map(courseArt).join("") +
@@ -419,7 +419,7 @@ function courseView() {
   const t = tracks.find((t) => t.id === currentTrack);
   const group = lessons.filter((l) => l.track === t.id);
   return (
-    '<div class="inner"><h1>课程路线</h1><p class="lead">这里可以按主题选课。零基础建议从<a class="text-link" href="#chapters">四周每日章节</a>顺着学。</p><div class="track-tabs" aria-label="选择篇章">' +
+    '<div class="inner"><h1>课程路线</h1><p class="lead">这里可以按主题选课。零基础建议从<a class="text-link" href="#chapters">六周每日章节</a>顺着学。</p><div class="track-tabs" aria-label="选择篇章">' +
     tracks
       .map(
         (item) =>
@@ -488,15 +488,12 @@ function starButton(key) {
   );
 }
 function row(item, key, dialogue = false) {
-  const read = state.readings
-    ? '<p class="reading">' +
-      (item.kana !== item.jp
-        ? '<span lang="ja">' + esc(item.kana) + "</span> · "
-        : "") +
-      '<span lang="en">' +
-      esc(item.romaji) +
-      "</span></p>"
-    : "";
+  const reading = [item.kana !== item.jp ? item.kana : "", item.romaji]
+    .filter(Boolean)
+    .map(esc)
+    .join(" · ");
+  const read =
+    state.readings && reading ? '<p class="reading">' + reading + "</p>" : "";
   return (
     '<div class="' +
     (dialogue ? "line-row" : "example") +
@@ -750,7 +747,7 @@ function spokenModel(item) {
 function missionView() {
   const i = tripTasks.findIndex((_, i) => !state.missionChecked.includes(i));
   if (i < 0)
-    return '<div class="panel"><h2>五个旅行任务已练完</h2><p>再做两道听说题，完成最后一章。也可以重新练这五个任务。</p><div class="actions"><a class="btn primary" href="#lesson/t09/4">进入结课练习</a><a class="tool" href="#practice/counter/mixed">换个店员，混合听六轮</a><button class="tool" data-action="mission-reset">重练旅行实战</button></div></div>';
+    return '<div class="panel"><h2>五个旅行任务已练完</h2><p>再做两道听说题，完成第四周的旅行实战。也可以重新练这五个任务。</p><div class="actions"><a class="btn primary" href="#lesson/t09/4">进入结课练习</a><a class="tool" href="#practice/counter/mixed">换个店员，混合听六轮</a><button class="tool" data-action="mission-reset">重练旅行实战</button></div></div>';
   const t = tripTasks[i],
     reveal = session.missionReveal === i;
   return `<div class="panel mission"><p class="small-label">旅行实战 · ${i + 1} / ${tripTasks.length} · ${t.place}</p><h2>轮到你开口</h2><p>${esc(t.prompt)}</p>${t.cue ? '<button class="tool" data-action="mission-listen" data-index="' + i + '">' + (session.missionHeard === i ? "再听对方说话" : "先听对方说话") + "</button>" : ""}
@@ -771,7 +768,7 @@ function readerStage(l) {
         l.id +
         '">把本课用在情景里 →</a>'
       : '<a class="btn" href="#practice/daily">去今日复习 →</a>';
-    extra += counterLessonLinks(l.id) + talkLink(l.id);
+    extra += counterLessonLinks(l.id) + talkLink(l.id, l.scene);
     if (l.id === "t02")
       extra +=
         '<a class="btn" href="#practice/platform">听站员回答，选站台 →</a>';
@@ -797,6 +794,13 @@ function readerStage(l) {
       part.examples
         .map((item, e) => row(item, l.id + ".s" + n + "." + e))
         .join("");
+    const sample = part.examples.at(-1);
+    if (sample)
+      content =
+        `<details class="chapter-recall"><summary>遮字自测 · 用日语说一遍</summary><p>试着说「${esc(sample.zh)}」。</p><details><summary>核对说法</summary><p lang="ja">${esc(sample.jp)} ${soundButton(sample.jp, "听本小节参考说法", sample.kana)}</p><p class="reading">${esc(sample.kana)}</p></details></details>` +
+        '<div class="chapter-instruction">' +
+        content +
+        "</div>";
     content += counterLessonBlock(l.id, n, soundButton);
     if (part.examples.some((x) => x.source))
       content +=
@@ -848,6 +852,9 @@ function readerStage(l) {
   }
   return (
     content +
+    (n === l.steps.length && l.scene
+      ? '<div class="lesson-row-links">' + talkLink(l.id, l.scene) + "</div>"
+      : "") +
     (n === l.steps.length && sceneById.has(l.id)
       ? '<div class="lesson-row-links"><a class="text-link" href="#practice/scene/' +
         l.id +
@@ -891,7 +898,9 @@ function lessonView(l) {
     crumb(t.name, "#courses/" + t.id, "课程") +
     '<header class="reader-header"><a class="text-link" href="#chapters">每日章节 · 第 ' +
     chapterOf(l.id) +
-    " / 28 章</a><h1>" +
+    " / " +
+    chapterIds.length +
+    " 章</a><h1>" +
     esc(l.title) +
     '</h1><p class="lead">' +
     esc(l.goal) +
@@ -915,7 +924,9 @@ function lessonView(l) {
           String(i + 1).padStart(2, "0") +
           "</span>" +
           esc(t) +
-          "</button>",
+          " · " +
+          l.stageMinutes[i] +
+          " 分钟</button>",
       )
       .join("") +
     '</aside><section class="stage" id="stage" tabindex="-1">' +
@@ -1205,7 +1216,7 @@ function reviewPanel() {
       ? '<p class="reading"><span lang="ja">' +
         esc(item.kana) +
         "</span> · " +
-        esc(item.romaji) +
+        esc(item.romaji || "") +
         "</p><p>" +
         esc(item.zh) +
         "</p>"

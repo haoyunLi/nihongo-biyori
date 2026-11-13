@@ -1,4 +1,4 @@
-import { talks, numberEdges } from "./talk-data.js";
+import { talks, numberEdges } from "./talk-data.js?v=13";
 
 export function normalise(text) {
   return String(text)

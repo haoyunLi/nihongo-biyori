@@ -11,13 +11,15 @@ import { clipStem } from "../clip-source.js?v=10";
 const plans = JSON.parse(
   readFileSync(new URL("../assets/timing/plans.json", import.meta.url)),
 );
-test("four weeks cover each chapter once and resume actual progress across calendar gaps", () => {
+test("six weeks cover each chapter once and resume actual progress across calendar gaps", () => {
   assert.deepEqual(
     units.map((x) => x.ids.length),
-    [7, 7, 7, 7],
+    [7, 7, 7, 7, 7, 7],
   );
   assert.deepEqual([...chapterIds].sort(), lessons.map((l) => l.id).sort());
-  assert.equal(chapterIds.at(-1), "t09");
+  assert.equal(chapterIds[27], "t09");
+  assert.equal(dailyChapter(chapterIds.slice(0, 28), {}, 50).next, "x01");
+  assert.equal(chapterIds.at(-1), "x14");
   const done = ["f01", "c01"],
     days = { f01: 10 };
   assert.deepEqual(dailyChapter(done, days, 10), {

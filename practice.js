@@ -11,9 +11,9 @@ import {
   recallCards,
   recordRating,
   updateBook,
-} from "./recall.js?v=12";
+} from "./recall.js?v=13";
 import { moraLabels } from "./mora-groups.js";
-import { rhythmTypes } from "./rhythm-review.js?v=12";
+import { rhythmTypes } from "./rhythm-review.js?v=13";
 import { scenes, sceneById, chunkReading } from "./scenes.js";
 
 const catalog = new Map();
@@ -109,7 +109,7 @@ export function createPractice(ctx) {
   }
   function dialogAnswer(card) {
     const v = card.item;
-    return `<div class="model-line"><strong lang="ja">${ctx.esc(v.jp)}</strong>${ctx.soundButton(v.jp, "听示范", v.kana)}</div><p class="reading"><span lang="ja">${ctx.esc(v.kana)}</span> · ${ctx.esc(v.romaji)}</p>`;
+    return `<div class="model-line"><strong lang="ja">${ctx.esc(v.jp)}</strong>${ctx.soundButton(v.jp, "听示范", v.kana)}</div><p class="reading"><span lang="ja">${ctx.esc(v.kana)}</span>${v.romaji?" · "+ctx.esc(v.romaji):""}</p>`;
   }
   function explanation(card) {
     if (card.kind === "rhythm")
@@ -311,7 +311,7 @@ export function createPractice(ctx) {
   }
   function model(scene, jp, save = false) {
     const { key, item } = word(scene, jp);
-    return `<div class="recall-model"><div class="model-line"><strong lang="ja">${ctx.esc(jp)}</strong>${ctx.soundButton(jp, "听日语示范", item.kana)}${ctx.recordButton({ jp, kana: item.kana, zh: item.zh, compact: true })}${save ? ctx.starButton(key) : ""}</div><p class="reading"><span lang="ja">${ctx.esc(item.kana)}</span> · ${ctx.esc(item.romaji)}</p><p>${ctx.esc(item.zh)}</p></div>`;
+    return `<div class="recall-model"><div class="model-line"><strong lang="ja">${ctx.esc(jp)}</strong>${ctx.soundButton(jp, "听日语示范", item.kana)}${ctx.recordButton({ jp, kana: item.kana, zh: item.zh, compact: true })}${save ? ctx.starButton(key) : ""}</div><p class="reading"><span lang="ja">${ctx.esc(item.kana)}</span>${item.romaji?" · "+ctx.esc(item.romaji):""}</p><p>${ctx.esc(item.zh)}</p></div>`;
   }
   function sceneView(scene) {
     if (!session || session.id !== scene.id) {
