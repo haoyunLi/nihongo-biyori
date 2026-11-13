@@ -1,4 +1,4 @@
-import { clipStem } from "./clip-source.js?v=10";
+import { clipStem } from "./clip-source.js?v=11";
 
 const audioDirectory = new URL("./assets/audio/", import.meta.url);
 let active = null;

@@ -4,15 +4,21 @@ import {
   dailyChapter,
   routeView,
 } from "./chapter-path.js";
-import { questions } from "./question-bank.js";
+import {
+  createCounter,
+  counterLessonBlock,
+  counterLessonLinks,
+  validCounter,
+} from "./counter-view.js";
+import { questions } from "./question-bank.js?v=11";
 import { sources } from "./screen-lessons.js";
-import { tripTasks } from "./travel-finish.js";
-import { localDay, scheduleMistake, updateBook } from "./recall.js?v=10";
+import { tripTasks } from "./travel-finish.js?v=11";
+import { localDay, scheduleMistake, updateBook } from "./recall.js?v=11";
 import {
   activityTitles,
   createListening,
 } from "./listening-activities.js?v=10";
-import { createRecorder, recordingButton } from "./recording.js?v=10";
+import { createRecorder, recordingButton } from "./recording.js?v=11";
 import { contrastById } from "./contrast-data.js";
 import {
   contrastView,
@@ -20,9 +26,9 @@ import {
   handleContrast,
   stopContrast,
   leaveContrast,
-} from "./contrast-view.js?v=10";
-import { lessons, references } from "./lessons.js?v=10";
-import { createPractice } from "./practice.js?v=10";
+} from "./contrast-view.js?v=11";
+import { lessons, references } from "./lessons.js?v=11";
+import { createPractice } from "./practice.js?v=11";
 import { sceneById } from "./scenes.js";
 import { kanaRows, kanaNotes, extraKana } from "./kana.js";
 import { strokes } from "./strokes.js?v=3";
@@ -34,8 +40,8 @@ import {
   handleGuide,
   changeGuideRow,
   stopGuidePlayback,
-} from "./guide-view.js?v=10";
-import { speak, stopAudio } from "./audio.js?v=10";
+} from "./guide-view.js?v=11";
+import { speak, stopAudio } from "./audio.js?v=11";
 
 const tracks = [
   {
@@ -191,6 +197,16 @@ const listening = createListening({
   speak,
   slow: () => state.slow,
 });
+const counter = createCounter({
+  main,
+  esc,
+  soundButton,
+  spokenModel,
+  speak,
+  silence,
+  noteMiss,
+  slow: () => state.slow,
+});
 const mic = createRecorder({
   onRecordedClose: (action) => {
     if (action === "station-repeat" && location.hash === "#practice/platform")
@@ -240,6 +256,7 @@ let audioEpoch = 0,
   sequence = false;
 function silence() {
   listening.stop();
+  counter.stop();
   audioEpoch++;
   sequence = false;
   stopContrast();
@@ -731,7 +748,7 @@ function spokenModel(item) {
 function missionView() {
   const i = tripTasks.findIndex((_, i) => !state.missionChecked.includes(i));
   if (i < 0)
-    return '<div class="panel"><h2>五个旅行任务已练完</h2><p>再做两道听说题，完成最后一章。也可以重新练这五个任务。</p><div class="actions"><a class="btn primary" href="#lesson/t09/4">进入结课练习</a><button class="tool" data-action="mission-reset">重练旅行实战</button></div></div>';
+    return '<div class="panel"><h2>五个旅行任务已练完</h2><p>再做两道听说题，完成最后一章。也可以重新练这五个任务。</p><div class="actions"><a class="btn primary" href="#lesson/t09/4">进入结课练习</a><a class="tool" href="#practice/counter/mixed">换个店员，混合听六轮</a><button class="tool" data-action="mission-reset">重练旅行实战</button></div></div>';
   const t = tripTasks[i],
     reveal = session.missionReveal === i;
   return `<div class="panel mission"><p class="small-label">旅行实战 · ${i + 1} / ${tripTasks.length} · ${t.place}</p><h2>轮到你开口</h2><p>${esc(t.prompt)}</p>${t.cue ? '<button class="tool" data-action="mission-listen" data-index="' + i + '">' + (session.missionHeard === i ? "再听对方说话" : "先听对方说话") + "</button>" : ""}
@@ -752,6 +769,7 @@ function readerStage(l) {
         l.id +
         '">把本课用在情景里 →</a>'
       : '<a class="btn" href="#practice/daily">去今日复习 →</a>';
+    extra += counterLessonLinks(l.id);
     if (l.id === "t02")
       extra +=
         '<a class="btn" href="#practice/platform">听站员回答，选站台 →</a>';
@@ -777,6 +795,7 @@ function readerStage(l) {
       part.examples
         .map((item, e) => row(item, l.id + ".s" + n + "." + e))
         .join("");
+    content += counterLessonBlock(l.id, n, soundButton);
     if (part.examples.some((x) => x.source))
       content +=
         '<p class="source-note">短引按出处保留；发音是本站日语教学配音。后面的情境对话是原创练习。</p>';
@@ -1306,6 +1325,11 @@ function go() {
     session.reviewIndex = 0;
     session.mistakeFilter = "";
   }
+  counter.enter(
+    route === "practice" && arg === "counter" && validCounter(num)
+      ? num
+      : undefined,
+  );
   listening.leave(route === "practice" ? arg : null);
   if (route !== "practice" || arg !== "sounds") leaveContrast();
   if (route !== "practice" || arg !== "daily") practice.leaveDaily();
@@ -1315,6 +1339,7 @@ function go() {
     !(
       Object.hasOwn(activityTitles, arg) ||
       arg === "daily" ||
+      (arg === "counter" && validCounter(num)) ||
       (arg === "sounds" && (!num || contrastById.has(num))) ||
       (arg === "scene" && sceneById.has(num))
     )
@@ -1367,11 +1392,13 @@ function go() {
     kana: () => (arg ? guideView(arg, num, script, guideContext) : kanaView()),
     lesson: () => lessonView(currentLesson),
     practice: () =>
-      arg === "sounds"
-        ? contrastView(num, guideContext)
-        : Object.hasOwn(activityTitles, arg)
-          ? listening.view(arg)
-          : practice.view(arg, num),
+      arg === "counter"
+        ? counter.view()
+        : arg === "sounds"
+          ? contrastView(num, guideContext)
+          : Object.hasOwn(activityTitles, arg)
+            ? listening.view(arg)
+            : practice.view(arg, num),
     review: reviewView,
     about,
   };
@@ -1401,11 +1428,13 @@ function go() {
           : "五十音图",
       review: "复习手帖",
       practice:
-        arg === "sounds"
-          ? "相近音听辨"
-          : Object.hasOwn(activityTitles, arg)
-            ? activityTitles[arg]
-            : practice.title(arg, num),
+        arg === "counter"
+          ? "柜台换问法"
+          : arg === "sounds"
+            ? "相近音听辨"
+            : Object.hasOwn(activityTitles, arg)
+              ? activityTitles[arg]
+              : practice.title(arg, num),
       about: "教材与素材来源",
     }[route] ||
     "页面未找到";
@@ -1514,6 +1543,10 @@ main.addEventListener("click", (e) => {
       .finally(() => {
         button.disabled = false;
       });
+    return;
+  }
+  if (action.startsWith("counter-")) {
+    counter.handle(button);
     return;
   }
   if (action === "record-open") {

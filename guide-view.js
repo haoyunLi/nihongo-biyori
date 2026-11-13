@@ -1,8 +1,8 @@
 import { guideById, kanaGuides } from "./kana-guides.js";
 import { kanaNotes } from "./kana.js";
 import { strokes } from "./strokes.js?v=3";
-import { speak } from "./audio.js?v=10";
-import { humanKana, humanWords } from "./assets/audio/catalog.js?v=10";
+import { speak } from "./audio.js?v=11";
+import { humanKana, humanWords } from "./assets/audio/catalog.js?v=11";
 
 const stages = [
   ["listen", "听音与笔顺"],

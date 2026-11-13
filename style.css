@@ -2326,3 +2326,21 @@ footer > div {
 .mission > button {
   margin: 8px 8px 0 0;
 }
+
+.counter-page .panel { margin-top: 1.2rem; }
+.counter-line, .counter-scores li { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .85rem 0; border-bottom: 1px solid var(--line, #ded8cd); }
+.counter-line strong { font-size: 1.15rem; }
+.counter-line p, .counter-hint p { margin: .25rem 0; }
+.counter-page h3 { margin-top: 1.35rem; }
+.counter-task .actions, .counter-task .answer-set { margin: 1rem 0; }
+.counter-task .answer { display: grid; gap: .25rem; }
+.counter-task .answer small { font-weight: 400; }
+.counter-hint { padding: .8rem 1rem; border-inline-start: 3px solid currentColor; }
+.counter-scores { list-style: none; padding: 0; }
+.counter-scores a { color: inherit; text-decoration: underline; text-underline-offset: .2em; }
+
+.counter-lesson { margin-top: 1.2rem; border-top: 1px solid var(--line); padding-top: .8rem; }
+.counter-lesson p { margin: .45rem 0; }
+.counter-lesson .tool { margin-top: .4rem; }
+
+.counter-page .practice-feature + h2 { margin-top: 1.5rem; }

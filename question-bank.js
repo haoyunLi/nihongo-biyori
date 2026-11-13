@@ -1,4 +1,12 @@
-import { lessons } from "./lessons.js?v=10";
+import {
+  counterSpeech,
+  finalCues,
+  finalQuizCue,
+  mixed,
+  guided,
+  families,
+} from "./counter-data.js";
+import { lessons } from "./lessons.js?v=11";
 import { station, animeScenes } from "./activity-data.js";
 import { contrasts } from "./contrast-data.js";
 import { scenes } from "./scenes.js";
@@ -95,6 +103,14 @@ const spoken = {
   ],
 };
 export const additionalSpeech = [
+  ...counterSpeech,
+  ...finalCues,
+  finalQuizCue,
+  {
+    jp: "予約しました。リンです。",
+    kana: "よやくしました。りんです。",
+    zh: "我订过房。我姓林。",
+  },
   { jp: "かさ", kana: "かさ", spoken: "傘", zh: "伞" },
   { jp: "やき", kana: "やき", spoken: "焼き", zh: "练习音节 ya・ki" },
   { jp: "ぱ", kana: "ぱ", zh: "pa" },
@@ -163,6 +179,29 @@ function add(
     listen,
     learner: model.learner,
   });
+}
+for (const q of [...guided, ...mixed]) {
+  const f = families[q.family];
+  add(
+    "counter:" + q.id,
+    q.goal + " 听店员说完，哪句能接上？",
+    q.options,
+    q.answer,
+    q.cue.jp +
+      "（" +
+      q.cue.kana +
+      "）意思是“" +
+      q.cue.zh +
+      "”。留意「" +
+      q.cue.clue +
+      "」。" +
+      f.clue,
+    q.model,
+    "#practice/counter/" + q.family,
+    "柜台换问法 · " + f.name,
+    "柜台接话",
+    q.cue.jp,
+  );
 }
 station.platforms.forEach((m, i) =>
   add(

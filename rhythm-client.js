@@ -1,5 +1,5 @@
 import { cut } from "./rhythm-excerpt.js?v=8";
-import { clipStem } from "./clip-source.js?v=10";
+import { clipStem } from "./clip-source.js?v=11";
 
 const unavailable = (reason = "unavailable") => ({
   status: "uncertain",
@@ -51,7 +51,7 @@ export function createTimingSession(target) {
   }
   function run(id, ref, take, slow, part) {
     if (!worker) {
-      worker = new Worker(new URL("./rhythm-worker.js?v=10", import.meta.url), {
+      worker = new Worker(new URL("./rhythm-worker.js?v=11", import.meta.url), {
         type: "module",
       });
       worker.onmessage = ({ data }) => {

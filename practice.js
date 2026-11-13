@@ -11,9 +11,9 @@ import {
   recallCards,
   recordRating,
   updateBook,
-} from "./recall.js?v=10";
+} from "./recall.js?v=11";
 import { moraLabels } from "./mora-groups.js";
-import { rhythmTypes } from "./rhythm-review.js?v=10";
+import { rhythmTypes } from "./rhythm-review.js?v=11";
 import { scenes, sceneById, chunkReading } from "./scenes.js";
 
 const catalog = new Map();
@@ -77,7 +77,7 @@ export function createPractice(ctx) {
         "下一次复习在 " +
         dayLabel(plan.nextDue) +
         "。现在可以选一个场景练接话。";
-    return `<div class="inner narrow"><h1>练习室</h1><section class="practice-feature"><h2>今日复习</h2><p>${desc}</p><a class="btn primary" href="#practice/daily">${pending ? "进入复习 · " + round.ids.length + " 张" : "查看复习安排"} →</a></section><div class="sound-entry"><div><h2>相近音听辨</h2><p>听「来て」和「切手」，辨别中间多出的一拍，再录下自己的说法核对。</p></div><a class="btn" href="#practice/sounds">进入听辨 →</a></div><div class="listen-entries"><a class="scene-link" href="#practice/platform"><span>旅行听力</span><strong>听回答，去站台</strong><span>听站员报数，在图上选入口 →</span></a><a class="scene-link" href="#practice/anime"><span>动漫听力</span><strong>动漫台词拆听</strong><span>先听两位朋友说话，再拆口语 →</span></a></div><div class="section-head"><h2>情景接话</h2></div><p class="scene-intro">选一个你想去的地方。听对方说话，再用打乱的日语语块拼出自己的回应。</p><div class="scene-list">${sceneList()}</div></div>`;
+    return `<div class="inner narrow"><h1>练习室</h1><section class="practice-feature"><h2>今日复习</h2><p>${desc}</p><a class="btn primary" href="#practice/daily">${pending ? "进入复习 · " + round.ids.length + " 张" : "查看复习安排"} →</a></section><div class="sound-entry"><div><h2>相近音听辨</h2><p>听「来て」和「切手」，辨别中间多出的一拍，再录下自己的说法核对。</p></div><a class="btn" href="#practice/sounds">进入听辨 →</a></div><div class="sound-entry"><div><h2>柜台换问法</h2><p>店员换个说法，你还能用学过的话回答吗？分情境听，也可以直接听六轮混合题。</p></div><a class="btn" href="#practice/counter">练柜台接话 →</a></div><div class="listen-entries"><a class="scene-link" href="#practice/platform"><span>旅行听力</span><strong>听回答，去站台</strong><span>听站员报数，在图上选入口 →</span></a><a class="scene-link" href="#practice/anime"><span>动漫听力</span><strong>动漫台词拆听</strong><span>先听两位朋友说话，再拆口语 →</span></a></div><div class="section-head"><h2>情景接话</h2></div><p class="scene-intro">选一个你想去的地方。听对方说话，再用打乱的日语语块拼出自己的回应。</p><div class="scene-list">${sceneList()}</div></div>`;
   }
   function crumbs(current) {
     return `<div class="crumb"><a href="#practice">练习室</a><span aria-hidden="true">›</span>${current}</div>`;

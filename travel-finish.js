@@ -1,3 +1,4 @@
+import {finalCues, finalQuizCue} from "./counter-data.js";
 // Original travel lessons and the final spoken tasks. Alternate responses are
 // examples for self-check; recordings are compared for timing only.
 const p = (jp, kana, romaji, zh) => ({ jp, kana, romaji, zh });
@@ -118,17 +119,17 @@ export const tripTasks = [
   },
   {
     place: "小店",
-    prompt: "你想点鱼套餐。店员这样回答。听完换成咖喱。",
-    cue: sold,
+    prompt: "你首选鱼套餐，第二选择是咖喱。听店员说完，开口回应。",
+    cue: finalCues[0],
     model: change,
-    tip: "听到売り切れ就换菜名；用ください或お願いします提出请求都可以。",
+    tip: "もうございません表示已经没有了。用じゃあ接上你的第二选择。",
   },
   {
     place: "柜台",
     prompt: "你打算带走午饭。听店员的问题，回答你的用餐方式。",
-    cue: dineQ,
+    cue: finalCues[1],
     model: takeout,
-    tip: "持ち帰り表示外带。只说这一词也能表达主要意思。",
+    tip: "こちらで问是否在这里吃。直接回答持ち帰りでお願いします，就能说清你要带走。",
   },
   {
     place: "收银台",
@@ -324,18 +325,18 @@ export const travelFinish = [
         "支付确认",
       ),
       q(
-        "同伴赶火车，想把午饭带走。听到这句怎么接？",
+        "你已经挑好咖喱，打算带上车吃。听店员说完，再回答这一次的问题。",
         [
           "お会計をお願いします。",
           "店内でお願いします。",
           "持ち帰りでお願いします。",
         ],
         2,
-        "店员在确认用餐地点。要带走，说持ち帰り。",
+        "听到「お持ち帰り」就知道店员在确认是否外带。直接说出带走的选择即可。",
         takeout,
         1,
         "听后接话",
-        dineQ.jp,
+        finalQuizCue.jp,
       ),
     ],
   },
