@@ -1687,9 +1687,10 @@ addBridges(lessons);
 addCounterChecks(lessons);
 
 
-// Learning steps, dialogue and retrieval each get a share of one day's practice.
+// Daily estimates reserve time for due spoken reviews and the chapter conversation.
 for (const lesson of lessons) {
-  lesson.stageMinutes = lesson.steps.map((_,i)=>lesson.steps.length===2 || (lesson.steps.length===3 && i===2 && !lesson.mission) ? 3 : 2);
-  lesson.stageMinutes.push(lesson.mission ? 6 : 3, lesson.mission ? 3 : 2);
-  lesson.minutes = lesson.stageMinutes.reduce((sum,n)=>sum+n,0);
+  lesson.reviewMinutes=2;
+  lesson.stageMinutes=lesson.steps.map((_,i)=>lesson.steps.length===4 ? (i<2?2:1) : lesson.steps.length===2?2:(i===0?2:1));
+  lesson.stageMinutes.push(lesson.mission?4:2,2,3);
+  lesson.minutes=lesson.reviewMinutes+lesson.stageMinutes.reduce((sum,n)=>sum+n,0);
 }

@@ -1,3 +1,4 @@
+import { chapterTurns, chapterAnswer } from "./chapter-talk-data.js";
 import { talks } from "./talk-data.js?v=13";
 import {
   interpret,
@@ -67,6 +68,7 @@ export function createTalk(ctx) {
   let continuous = false,
     confirming = false,
     preferredAuto = false;
+  let assignment;
   let scene,
     run,
     previous = [],
@@ -85,7 +87,22 @@ export function createTalk(ctx) {
     heard = false,
     lastTurn = null,
     memoryNote = "";
-  const getNode = () => talks[scene].nodes[run.node];
+  const entry = () => chapterTurns.get(run?.node);
+  function getNode() {
+    if (!assignment) return talks[scene].nodes[run.node];
+    const t = entry();
+    return {
+      title: t.goal,
+      prompt: run.items[run.index].variant ? t.alternate : t.first,
+      hint: "先想想「" + t.model.zh + "」怎么说。需要时展开示范。",
+      edges: [{ model: t.model, next: null }],
+    };
+  }
+  const understand = (raw) =>
+    assignment ? chapterAnswer(entry(), raw) : interpret(scene, run.node, raw);
+  const partner = () => talks[assignment ? entry().scene : scene];
+  const partnerRole = () => (assignment ? entry().role : partner().role);
+
   const busy = () =>
     ["loading", "permission", "listening", "decoding"].includes(phase);
   function stop() {
@@ -105,6 +122,7 @@ export function createTalk(ctx) {
     endVoice();
     modelStore.release();
     run = null;
+    assignment = null;
     scene = null;
   }
   function enter(id) {
@@ -113,6 +131,12 @@ export function createTalk(ctx) {
     preferredAuto = false;
     if (id) previous = saved(id);
     memoryNote = "";
+  }
+  function enterAssignment(config) {
+    leave();
+    assignment = config;
+    scene = chapterTurns.get(config.items[0].id).scene;
+    preferredAuto = false;
   }
   function clearTurn() {
     draft = "";
@@ -229,7 +253,7 @@ export function createTalk(ctx) {
         capture = null;
         phase = "";
         if (continuous) {
-          const intent = interpret(scene, run.node, value);
+          const intent = understand(value);
           if (canAutoReply(result, intent, reason)) {
             accept(value, intent);
             return;
@@ -264,13 +288,16 @@ export function createTalk(ctx) {
     const node = getNode(),
       model = result.model || node.edges[0].model.jp;
     lastTurn = { text, skipped, model };
-    finishTurn(run, result, { text, model, attempt });
+    const variant = run.items?.[run.index]?.variant;
+    const record = finishTurn(run, result, { text, model, attempt });
+    if (assignment) assignment.result(record, variant);
     clearTurn();
     clip = [...result.replies];
     if (run.done) {
       endVoice();
       if (run.items) clip = [];
-      saveReview();
+      if (assignment) assignment.complete();
+      else saveReview();
       refresh();
       if (clip.length) void play(clip);
       return;
@@ -289,7 +316,7 @@ export function createTalk(ctx) {
       return;
     }
     const raw = draft.trim().slice(0, 160),
-      result = interpret(scene, run.node, raw);
+      result = understand(raw);
     accept(raw, result);
   }
   function accept(raw, result) {
@@ -312,6 +339,7 @@ export function createTalk(ctx) {
     stop();
     confirming = continuous;
     run.support.add("unclear");
+    assignment?.miss(run.node);
     attempt = raw;
     notice =
       result.message || "对方还没能接上这句。可以换个说法，也可以点提示。";
@@ -383,14 +411,16 @@ export function createTalk(ctx) {
           : button("type", typed ? "重新输入日语" : "用日语输入")) +
         (!b && voiceAvailable() ? button("resume", "继续免按对话") : "");
     const promptLine = showLine ? optLine(n.prompt) : "";
-    const idx = run.items
-      ? `重练 ${run.index + 1} / ${run.items.length}`
-      : `对话 · 第 ${run.index + 1} 轮`;
-    return `<h1>${talks[scene].title}</h1><section class="panel talk-round"><p class="small-label">${idx} · ${talks[scene].role}</p><h2>听完，用日语接话</h2>${lastTurn?.skipped && !run.items ? `<p class="talk-last">这句先跳过，情景按「${ctx.esc(lastTurn.model)}」继续。</p>` : lastTurn?.text && !run.items ? `<p class="talk-last">你刚才说　<span lang="ja">${ctx.esc(lastTurn.text)}</span></p>` : ""}
+    const idx = assignment
+      ? assignment.label + " · " + (run.index + 1) + " / " + run.items.length
+      : run.items
+        ? `重练 ${run.index + 1} / ${run.items.length}`
+        : `对话 · 第 ${run.index + 1} 轮`;
+    return `<h1>${partner().title}</h1><section class="panel talk-round"><p class="small-label">${idx} · ${partnerRole()}</p><h2>听完，用日语接话</h2>${assignment ? '<p class="talk-goal">' + ctx.esc(entry().goal) + "</p>" : ""}${lastTurn?.skipped && !run.items ? `<p class="talk-last">这句先跳过，情景按「${ctx.esc(lastTurn.model)}」继续。</p>` : lastTurn?.text && !run.items ? `<p class="talk-last">你刚才说　<span lang="ja">${ctx.esc(lastTurn.text)}</span></p>` : ""}
    <div class="actions">${button("listen", phase === "playing" ? "重新播放" : heard ? "再听问题" : "听对方说", false, b)}${button("line", "看原句和中文", false, (!continuous && b) || showLine)}</div>${promptLine}
    <div class="talk-response"><div class="actions">${voiceButtons}</div>
    <p class="reading" role="status" aria-live="polite">${ctx.esc(status || notice || (!voiceAvailable() ? "当前环境无法开麦，可以直接输入日语。" : "也可以切到连续对话，说完停一下就能接着聊。"))}</p>
-   ${typed && !b ? `<form data-talk-form><label for="talk-draft">${captured ? "听写结果，可改字" : "你的日语回答"}</label><div class="talk-send"><input id="talk-draft" data-talk-draft lang="ja" maxlength="160" autocomplete="off" value="${ctx.esc(draft)}"><button class="btn primary" data-action="talk-send" type="submit">${confirming ? "确认并接着聊" : "发送给" + talks[scene].role}</button></div></form>` : ""}</div>
+   ${typed && !b ? `<form data-talk-form><label for="talk-draft">${captured ? "听写结果，可改字" : "你的日语回答"}</label><div class="talk-send"><input id="talk-draft" data-talk-draft lang="ja" maxlength="160" autocomplete="off" value="${ctx.esc(draft)}"><button class="btn primary" data-action="talk-send" type="submit">${confirming ? "确认并接着聊" : "发送给" + partnerRole()}</button></div></form>` : ""}</div>
    <div class="actions">${button("hint", "卡住了，给个提示", false, (!continuous && b) || hint)}${button("skip", "这句先跳过", false, b)}</div>
    ${
      hint
@@ -411,14 +441,37 @@ export function createTalk(ctx) {
        : ""
    } </section>`;
   }
+  function assignedView() {
+    const a = assignment;
+    const back = `<div class="crumb"><a href="#chapters">每日章节</a><span>›</span>${ctx.esc(a.label)}</div>`;
+    if (run && !run.done)
+      return (
+        '<div class="inner narrow talk-page">' + back + active() + "</div>"
+      );
+    const misses = run?.records.filter((r) => r.flags.length) || [];
+    const body = run
+      ? `<h1>${a.review ? "复习结束" : "章末对话完成"}</h1><div class="panel"><p>${run.records.length - misses.length} / ${run.records.length} 轮独立接上。</p>${
+          misses.length
+            ? `<h3>下个学习日换问法</h3><ul>${misses
+                .map((r) => {
+                  const t = chapterTurns.get(r.id);
+                  return `<li>${ctx.esc(t.goal)}<p lang="ja">${ctx.esc(t.model.jp)}</p></li>`;
+                })
+                .join("")}</ul>`
+            : ""
+        }<a class="btn primary" href="${a.returnURL}">${a.returnLabel}</a></div>`
+      : `<h1>${ctx.esc(a.label)}</h1><section class="practice-feature"><h2>${ctx.esc(a.title)}</h2><p>${ctx.esc(a.intro)}</p><p>${a.items.length} 轮 · 约 ${a.review ? 2 : 3} 分钟</p><div class="actions">${voiceAvailable() ? button("auto", "开启连续对话", true) : ""}${button("start", "逐句练习或输入日语", !voiceAvailable())}</div></section>`;
+    return '<div class="inner narrow talk-page">' + back + body + "</div>";
+  }
   function view() {
+    if (assignment) return assignedView();
     return `<div class="inner narrow talk-page"><div class="crumb"><a href="#practice">练习室</a><span>›</span><a href="${route()}">开口对话</a></div>${!scene ? hub() : !run ? intro() : run.done ? summary() : active()}</div>`;
   }
   function handle(b) {
     const a = b.dataset.action.slice(5);
     sync();
     if (a === "start" || a === "auto") {
-      start(null, a === "auto");
+      start(assignment?.items || null, a === "auto");
       return;
     }
     if (a === "retry" && previous.length) {
@@ -524,5 +577,5 @@ export function createTalk(ctx) {
     }
     refresh();
   }
-  return { view, enter, leave, handle, send, interrupt };
+  return { view, enter, enterAssignment, leave, handle, send, interrupt };
 }

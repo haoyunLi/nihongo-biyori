@@ -1,3 +1,4 @@
+import {chapterSpeech} from "./chapter-talk-data.js";
 import { talkSpeech } from "./talk-data.js?v=13";
 import {
   counterSpeech,
@@ -7,7 +8,7 @@ import {
   guided,
   families,
 } from "./counter-data.js";
-import { lessons } from "./lessons.js?v=13";
+import { lessons } from "./lessons.js?v=15";
 import { station, animeScenes } from "./activity-data.js";
 import { contrasts } from "./contrast-data.js";
 import { scenes } from "./scenes.js";
@@ -104,6 +105,7 @@ const spoken = {
   ],
 };
 export const additionalSpeech = [
+  ...chapterSpeech,
   ...talkSpeech,
   ...counterSpeech,
   ...finalCues,

@@ -11,9 +11,9 @@ import {
   recallCards,
   recordRating,
   updateBook,
-} from "./recall.js?v=13";
+} from "./recall.js?v=15";
 import { moraLabels } from "./mora-groups.js";
-import { rhythmTypes } from "./rhythm-review.js?v=13";
+import { rhythmTypes } from "./rhythm-review.js?v=15";
 import { scenes, sceneById, chunkReading } from "./scenes.js";
 
 const catalog = new Map();

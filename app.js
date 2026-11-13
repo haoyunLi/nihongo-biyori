@@ -1,25 +1,27 @@
-import { createTalk, validTalk, talkLink } from "./talk-view.js?v=14";
+import { chapterTalks } from "./chapter-talk-data.js";
+import { createChapterBook } from "./chapter-talk-book.js";
+import { createTalk, validTalk, talkLink } from "./talk-view.js?v=15";
 import {
   chapterIds,
   chapterOf,
   dailyChapter,
   routeView,
-} from "./chapter-path.js?v=13";
+} from "./chapter-path.js?v=15";
 import {
   createCounter,
   counterLessonBlock,
   counterLessonLinks,
   validCounter,
 } from "./counter-view.js?v=13";
-import { questions } from "./question-bank.js?v=13";
+import { questions } from "./question-bank.js?v=15";
 import { sources } from "./screen-lessons.js";
 import { tripTasks } from "./travel-finish.js?v=13";
-import { localDay, scheduleMistake, updateBook } from "./recall.js?v=13";
+import { localDay, scheduleMistake, updateBook } from "./recall.js?v=15";
 import {
   activityTitles,
   createListening,
 } from "./listening-activities.js?v=10";
-import { createRecorder, recordingButton } from "./recording.js?v=13";
+import { createRecorder, recordingButton } from "./recording.js?v=15";
 import { contrastById } from "./contrast-data.js";
 import {
   contrastView,
@@ -27,9 +29,9 @@ import {
   handleContrast,
   stopContrast,
   leaveContrast,
-} from "./contrast-view.js?v=13";
-import { lessons, references } from "./lessons.js?v=13";
-import { createPractice } from "./practice.js?v=13";
+} from "./contrast-view.js?v=15";
+import { lessons, references } from "./lessons.js?v=15";
+import { createPractice } from "./practice.js?v=15";
 import { sceneById } from "./scenes.js";
 import { kanaRows, kanaNotes, extraKana } from "./kana.js";
 import { strokes } from "./strokes.js?v=3";
@@ -41,8 +43,8 @@ import {
   handleGuide,
   changeGuideRow,
   stopGuidePlayback,
-} from "./guide-view.js?v=13";
-import { speak, stopAudio } from "./audio.js?v=13";
+} from "./guide-view.js?v=15";
+import { speak, stopAudio } from "./audio.js?v=15";
 
 const tracks = [
   {
@@ -208,6 +210,61 @@ const counter = createCounter({
   noteMiss,
   slow: () => state.slow,
 });
+const chapterBook = createChapterBook(
+  {
+    getItem: (k) => localStorage.getItem(k),
+    setItem: (k, v) => localStorage.setItem(k, v),
+  },
+  localDay,
+);
+function finishChapter(id) {
+  const check = chapterBook.checkpoint(id);
+  if (check.quiz && check.talk && !state.done.includes(id)) {
+    state.done.push(id);
+    state.completionDays[id] = localDay();
+    save();
+  }
+}
+function chapterTalkSetup(id, review) {
+  const l = lessonById.get(id),
+    plan = chapterTalks.get(id);
+  const items = review ? chapterBook.due() : chapterBook.remaining(id);
+  if (!items.length) return false;
+  const returnURL = review
+    ? id === "today"
+      ? "#chapters"
+      : lessonURL(id)
+    : lessonURL(id, l.steps.length + 2);
+  talk.enterAssignment({
+    items,
+    review,
+    label: review ? "今日开口复习" : "第 " + chapterOf(id) + " 章 · 章末接话",
+    title: review ? "把上次卡住的话再说一遍" : l.title,
+    intro: review
+      ? "对方会换一个说法。按情境用日语回答，接上就能回到今天的章节。"
+      : plan.intro,
+    returnURL,
+    returnLabel: review
+      ? id === "today"
+        ? "回每日章节"
+        : "继续今天的章节"
+      : "回到章节进度",
+    miss: (key) => {
+      if (!review) chapterBook.settle(key, ["unclear"], false);
+    },
+    result: (r, variant) => {
+      if (review) chapterBook.settle(r.id, r.flags, true, variant);
+      else chapterBook.markTurn(r.id, r.flags);
+    },
+    complete: () => {
+      if (!review) finishChapter(id);
+    },
+  });
+  return true;
+}
+function assignedURL(id, review = false) {
+  return "#practice/" + (review ? "chapter-review" : "chapter-talk") + "/" + id;
+}
 const talk = createTalk({ main, esc, speak, stopAudio });
 const mic = createRecorder({
   onRecordedClose: (action) => {
@@ -592,6 +649,7 @@ function stageTitles(lesson) {
     ...lesson.steps.map((s) => s.title),
     lesson.mission ? "旅行实战" : "情景对话",
     "随堂练习",
+    "用本章句子接话",
   ];
 }
 function manageQuiz(l) {
@@ -657,22 +715,14 @@ function questionView(q, i, size, selected, review = false) {
 function quizStage(l) {
   manageQuiz(l);
   if (session.finished) {
-    const next = lessonById.get(chapterIds[chapterOf(l.id)]);
     return (
       '<div class="panel"><p class="complete">' +
       ic("check") +
-      " 已完成本课</p><h2>" +
+      " 小测已完成</p><h2>" +
       esc(l.title) +
-      "</h2><p>" +
-      esc(l.goal) +
-      '</p><div class="actions" style="margin-top:16px"><a class="btn primary" href="#chapters">回每日章节</a>' +
-      (next
-        ? '<a class="btn primary" href="' +
-          lessonURL(next.id) +
-          '">提前学下一章 ' +
-          ic("arrow") +
-          "</a>"
-        : '<a class="btn primary" href="#review">打开复习手帖</a>') +
+      '</h2><div class="actions"><a class="btn primary" href="' +
+      lessonURL(l.id, l.steps.length + 2) +
+      '">进入章末接话</a>' +
       '<button class="tool" data-action="retry">重做练习</button></div></div>'
     );
   }
@@ -688,7 +738,9 @@ function quizStage(l) {
       : "") +
     (session.answer === q.answer
       ? '<div class="actions" style="margin-top:15px"><button class="btn primary" data-action="advance">' +
-        (session.question === l.quiz.length - 1 ? "完成本课" : "下一题") +
+        (session.question === l.quiz.length - 1
+          ? "完成小测，进入接话"
+          : "下一题") +
         " " +
         ic("arrow") +
         "</button></div>"
@@ -747,7 +799,7 @@ function spokenModel(item) {
 function missionView() {
   const i = tripTasks.findIndex((_, i) => !state.missionChecked.includes(i));
   if (i < 0)
-    return '<div class="panel"><h2>五个旅行任务已练完</h2><p>再做两道听说题，完成第四周的旅行实战。也可以重新练这五个任务。</p><div class="actions"><a class="btn primary" href="#lesson/t09/4">进入结课练习</a><a class="tool" href="#practice/counter/mixed">换个店员，混合听六轮</a><button class="tool" data-action="mission-reset">重练旅行实战</button></div></div>';
+    return '<div class="panel"><h2>五个旅行任务已练完</h2><p>接下来做两道小测，再用本章的句子聊三轮。也可以重新练这五个任务。</p><div class="actions"><a class="btn primary" href="#lesson/t09/4">进入结课练习</a><a class="tool" href="#practice/counter/mixed">换个店员，混合听六轮</a><button class="tool" data-action="mission-reset">重练旅行实战</button></div></div>';
   const t = tripTasks[i],
     reveal = session.missionReveal === i;
   return `<div class="panel mission"><p class="small-label">旅行实战 · ${i + 1} / ${tripTasks.length} · ${t.place}</p><h2>轮到你开口</h2><p>${esc(t.prompt)}</p>${t.cue ? '<button class="tool" data-action="mission-listen" data-index="' + i + '">' + (session.missionHeard === i ? "再听对方说话" : "先听对方说话") + "</button>" : ""}
@@ -755,6 +807,18 @@ function missionView() {
 }
 function readerStage(l) {
   const n = stageIndex;
+  if (n === l.steps.length + 2) {
+    const plan = chapterTalks.get(l.id),
+      cp = chapterBook.checkpoint(l.id),
+      left = chapterBook.remaining(l.id);
+    finishChapter(l.id);
+    if (cp.talk && (cp.quiz || state.done.includes(l.id))) {
+      return `<div class="panel"><p class="complete">✓ 已完成本课</p><h2>${esc(l.title)}</h2><p>本章接话已练完。需要再练的句子将在下个学习日换个问法。</p><a class="btn primary" href="#chapters">回每日章节</a> <button class="tool" data-action="chapter-replay">再聊本章</button></div>`;
+    }
+    if (cp.talk)
+      return `<div class="panel"><h2>本章接话已完成</h2><a class="btn primary" href="${lessonURL(l.id, l.steps.length + 1)}">做随堂练习，完成本章</a></div>`;
+    return `<div class="panel"><p class="small-label">章末接话 · 约 3 分钟</p><h2>${esc(l.title)}</h2><p>${esc(plan.intro)}</p><a class="btn primary" href="${assignedURL(l.id)}">开始接话 · 剩 ${left.length} 轮</a></div>`;
+  }
   if (
     l.mission &&
     (n === l.steps.length ||
@@ -908,7 +972,7 @@ function lessonView(l) {
     esc(l.jpTitle) +
     "</span><span>约 " +
     l.minutes +
-    " 分钟</span>" +
+    " 分钟（含开口复习 2 分钟、章末接话 3 分钟）</span>" +
     (state.done.includes(l.id)
       ? '<span class="complete">' + ic("check") + " 已完成</span>"
       : "") +
@@ -1341,6 +1405,27 @@ function go() {
   talk.enter(
     route === "practice" && arg === "talk" && validTalk(num) ? num : undefined,
   );
+  const assigned =
+    route === "practice" &&
+    (arg === "chapter-talk" || arg === "chapter-review");
+  if (
+    assigned &&
+    (lessonById.has(num) || (arg === "chapter-review" && num === "today"))
+  ) {
+    if (!chapterTalkSetup(num, arg === "chapter-review")) {
+      location.replace(
+        num === "today"
+          ? "#chapters"
+          : lessonURL(
+              num,
+              arg === "chapter-talk"
+                ? lessonById.get(num).steps.length + 2
+                : undefined,
+            ),
+      );
+      return;
+    }
+  }
   counter.enter(
     route === "practice" && arg === "counter" && validCounter(num)
       ? num
@@ -1353,6 +1438,9 @@ function go() {
     route === "practice" &&
     arg &&
     !(
+      (assigned &&
+        (lessonById.has(num) ||
+          (arg === "chapter-review" && num === "today"))) ||
       Object.hasOwn(activityTitles, arg) ||
       arg === "daily" ||
       (arg === "counter" && validCounter(num)) ||
@@ -1383,7 +1471,7 @@ function go() {
   if (currentLesson) {
     const stored = Number(state.positions[arg]) || 0;
     stageIndex = Math.min(
-      currentLesson.steps.length + 1,
+      currentLesson.steps.length + 2,
       Math.max(
         0,
         num !== undefined && /^\d+$/.test(num)
@@ -1400,16 +1488,21 @@ function go() {
     state.last = arg;
     state.positions[arg] = stageIndex;
     save();
+    if (chapterBook.due().length) {
+      location.replace(assignedURL(arg, true));
+      return;
+    }
   }
   currentTrack = tracks.some((t) => t.id === arg) ? arg : "foundations";
   const view = {
     home,
-    chapters: () => routeView(lessonById, state, localDay()),
+    chapters: () =>
+      routeView(lessonById, state, localDay(), chapterBook.due().length),
     courses: courseView,
     kana: () => (arg ? guideView(arg, num, script, guideContext) : kanaView()),
     lesson: () => lessonView(currentLesson),
     practice: () =>
-      arg === "talk"
+      arg === "talk" || assigned
         ? talk.view()
         : arg === "counter"
           ? counter.view()
@@ -1425,7 +1518,7 @@ function go() {
     ? view[route]()
     : '<div class="inner"><h1>没有找到这一页</h1><p class="lead"><a class="text-link" href="#home">返回学习首页</a></p></div>';
   const active =
-    route === "lesson" || route === "chapters"
+    assigned || route === "lesson" || route === "chapters"
       ? "chapters"
       : route === "practice"
         ? "review"
@@ -1446,8 +1539,11 @@ function go() {
           ? guideById.get(arg).title + " · 逐行跟练"
           : "五十音图",
       review: "复习手帖",
-      practice:
-        arg === "talk"
+      practice: assigned
+        ? arg === "chapter-review"
+          ? "今日开口复习"
+          : "章末接话"
+        : arg === "talk"
           ? "开口对话"
           : arg === "counter"
             ? "柜台换问法"
@@ -1675,15 +1771,21 @@ main.addEventListener("click", (e) => {
     case "answer":
       markAnswer(Number(button.dataset.index), false);
       break;
+    case "chapter-replay":
+      chapterBook.patch(currentLesson.id, { passed: [], talk: false });
+      location.hash = assignedURL(currentLesson.id);
+      break;
     case "advance":
       if (session.answer !== currentLesson.quiz[session.question].answer) break;
       if (session.question === currentLesson.quiz.length - 1) {
         session.finished = true;
-        if (!state.done.includes(currentLesson.id)) {
-          state.done.push(currentLesson.id);
-          state.completionDays[currentLesson.id] = localDay();
-        }
+        chapterBook.patch(currentLesson.id, { quiz: true });
+        finishChapter(currentLesson.id);
+        state.positions[currentLesson.id] = currentLesson.steps.length + 2;
         save();
+        location.hash = chapterBook.remaining(currentLesson.id).length
+          ? assignedURL(currentLesson.id)
+          : lessonURL(currentLesson.id, currentLesson.steps.length + 2);
       } else session.question++;
       session.answer = null;
       rerenderStage();
@@ -1782,7 +1884,11 @@ function refreshChapterDay() {
   displayedDay = day;
   if (route === "home" || route === "chapters")
     main.innerHTML =
-      route === "home" ? home() : routeView(lessonById, state, day);
+      route === "home"
+        ? home()
+        : routeView(lessonById, state, day, chapterBook.due().length);
+  if (route === "lesson" && currentLesson && chapterBook.due().length)
+    location.replace(assignedURL(currentLesson.id, true));
 }
 window.addEventListener("focus", refreshChapterDay);
 document.addEventListener("visibilitychange", () => {

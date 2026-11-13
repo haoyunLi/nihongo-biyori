@@ -75,9 +75,9 @@ test("all 42 daily budgets span every actual learning step; the old graduation r
   assert.equal(dailyChapter(chapterIds.slice(0, 28), {}, 12).next, "x01");
   for (const l of lessons) {
     assert.ok(l.minutes >= 10 && l.minutes <= 15);
-    assert.equal(l.stageMinutes.length, l.steps.length + 2);
+    assert.equal(l.stageMinutes.length, l.steps.length + 3);
     assert.equal(
-      l.stageMinutes.reduce((a, b) => a + b, 0),
+      l.stageMinutes.reduce((a, b) => a + b, l.reviewMinutes),
       l.minutes,
     );
   }

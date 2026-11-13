@@ -1,5 +1,5 @@
 import { contrasts, contrastById, listeningRound } from "./contrast-data.js";
-import { speak } from "./audio.js?v=13";
+import { speak } from "./audio.js?v=15";
 
 let session,
   generation = 0,

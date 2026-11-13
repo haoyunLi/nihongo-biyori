@@ -40,7 +40,7 @@ export function dailyChapter(done, completionDays, day) {
   );
   return { next, today, complete: !next };
 }
-export function routeView(ctx, state, day) {
+export function routeView(ctx, state, day, due = 0) {
   const { next, today, complete } = dailyChapter(
     state.done,
     state.completionDays,
@@ -56,9 +56,9 @@ export function routeView(ctx, state, day) {
     : today.length
       ? "今日目标已完成"
       : "今日一章";
-  return `<div class="inner narrow chapter-route"><h1>每日章节</h1><p class="lead">每天约 10–15 分钟，学一章。隔天从上次的位置接着走，也可以点任意一章提前学。<a class="text-link" href="#courses">按主题找课</a></p>
+  return `<div class="inner narrow chapter-route"><h1>每日章节</h1><p class="lead">每天约 10–15 分钟，包含开头的复习和最后 2–3 轮接话。隔天从上次的位置接着走，也可以点任意一章提前学。<a class="text-link" href="#courses">按主题找课</a></p>
     <section class="chapter-today"><span class="small-label">${lead}</span><h2>${today.length ? today.map((id) => ordinal(id)).join("、") + " 已完成" : complete ? "把学过的日语用起来" : ordinal(next) + " · " + nextLesson.title}</h2>
-    <p>${complete || today.length ? "先到今日复习重练到期的题。" : nextLesson.goal}</p><div class="actions">${today.length || complete ? '<a class="btn primary" href="#practice/daily">去今日复习</a>' : link(next, state.positions[next] ? "继续本章" : "开始本章")}${today.length && next ? link(next, "提前学下一章", "tool") : ""}<a class="tool" href="#review/mistakes">打开错题本</a></div></section>
+    <p>${complete || today.length ? "今天的章内任务已完成。" : nextLesson.goal}</p><div class="actions">${due ? `<a class="btn primary" href="#practice/chapter-review/${next || "today"}">先复习上次的 ${due} 句</a>` : today.length || complete ? '<a class="tool" href="#practice/daily">额外练习（选做）</a>' : link(next, state.positions[next] ? "继续本章" : "开始本章")}${today.length && next ? link(next, "提前学下一章", "tool") : ""}<a class="tool" href="#review/mistakes">打开错题本</a></div></section>
     ${units
       .map(
         (u) =>
