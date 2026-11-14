@@ -34,6 +34,8 @@ test("all 24 branches stay within the week, ship distinct voiced transfer cues, 
           ),
       );
       for (let edition = 0; edition < 2; edition++) {
+        // Resume each edition of the itinerary saved before revision turns.
+        book.patch("week:" + id, { allowChanges: false });
         const p = tripAttempt(base, edition);
         assert.equal(p.turns.length, base.turns.length);
         const decision = p.turns.find((t) => assignedEntry(t.id).choices),

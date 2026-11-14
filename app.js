@@ -1,7 +1,7 @@
-import { chapterTalks } from "./chapter-talk-data.js";
-import { createChapterBook } from "./chapter-talk-book.js?v=19";
+import { chapterTalks } from "./chapter-talk-data.js?v=20";
+import { createChapterBook } from "./chapter-talk-book.js?v=20";
 import { weeklyTrips, tripByChapter, weekURL } from "./weekly-trips.js?v=19";
-import { createTalk, validTalk, talkLink } from "./talk-view.js?v=19";
+import { createTalk, validTalk, talkLink } from "./talk-view.js?v=20";
 import {
   chapterIds,
   chapterOf,
@@ -14,15 +14,15 @@ import {
   counterLessonLinks,
   validCounter,
 } from "./counter-view.js?v=13";
-import { questions } from "./question-bank.js?v=19";
+import { questions } from "./question-bank.js?v=20";
 import { sources } from "./screen-lessons.js";
 import { tripTasks } from "./travel-finish.js?v=13";
-import { localDay, scheduleMistake, updateBook } from "./recall.js?v=19";
+import { localDay, scheduleMistake, updateBook } from "./recall.js?v=20";
 import {
   activityTitles,
   createListening,
 } from "./listening-activities.js?v=10";
-import { createRecorder, recordingButton } from "./recording.js?v=19";
+import { createRecorder, recordingButton } from "./recording.js?v=20";
 import { contrastById } from "./contrast-data.js";
 import {
   contrastView,
@@ -30,9 +30,9 @@ import {
   handleContrast,
   stopContrast,
   leaveContrast,
-} from "./contrast-view.js?v=19";
-import { lessons, references } from "./lessons.js?v=19";
-import { createPractice } from "./practice.js?v=19";
+} from "./contrast-view.js?v=20";
+import { lessons, references } from "./lessons.js?v=20";
+import { createPractice } from "./practice.js?v=20";
 import { sceneById } from "./scenes.js";
 import { kanaRows, kanaNotes, extraKana } from "./kana.js";
 import { strokes } from "./strokes.js?v=3";
@@ -44,8 +44,8 @@ import {
   handleGuide,
   changeGuideRow,
   stopGuidePlayback,
-} from "./guide-view.js?v=19";
-import { speak, stopAudio } from "./audio.js?v=19";
+} from "./guide-view.js?v=20";
+import { speak, stopAudio } from "./audio.js?v=20";
 
 const tracks = [
   {
@@ -260,6 +260,7 @@ function tripSetup(trip) {
         r.choice,
         r.skipped,
         r.proposal,
+        r.repair,
       ),
     complete: () => finishChapter(id),
     restart: () => {
@@ -902,8 +903,8 @@ function readerStage(l) {
     return `<div class="panel"><h2>接着做随堂练习</h2><p>今天多留一分钟复习昨天的接话。做完小测，就去「${esc(trip.title)}」。</p><a class="btn primary" href="${lessonURL(l.id, n + 1)}">进入随堂练习</a></div>`;
   }
   if (trip && n === l.steps.length) {
-    const sample = chapterTalks.get(l.id).turns[0].model;
-    return `<div class="panel"><p class="small-label">行前热身 · 1 分钟</p><h2>把今天的一句话说顺</h2><p>${esc(sample.zh)}　先自己说一次，再听示范。</p><details><summary>核对说法</summary>${spokenModel(sample)}</details><p>小测后，从「${esc(trip.stops[0].place)}」出发，走完第 ${trip.week} 周的小旅行。</p><a class="btn primary" href="${lessonURL(l.id, n + 1)}">进入随堂练习</a></div><details class="trip-optional"${l.mission && session.extraMission ? " open" : ""}><summary>选做 · ${l.mission ? "原有五个旅行任务" : "完整情景对话"}</summary>${l.mission ? missionView() : l.dialogue.map((item, d) => row(item, l.id + ".d" + d, true)).join("")}</details>`;
+    const sample = l.changeExample || chapterTalks.get(l.id).turns[0].model;
+    return `<div class="panel"><p class="small-label">行前热身 · 1 分钟</p><h2>试着把刚决定的事改一下</h2><p>${esc(sample.zh)}　先自己说一次，再听示范。</p><details><summary>核对说法</summary>${spokenModel(sample)}</details><p>小测后，从「${esc(trip.stops[0].place)}」出发，走完第 ${trip.week} 周的小旅行。</p><a class="btn primary" href="${lessonURL(l.id, n + 1)}">进入随堂练习</a></div><details class="trip-optional"${l.mission && session.extraMission ? " open" : ""}><summary>选做 · ${l.mission ? "原有五个旅行任务" : "完整情景对话"}</summary>${l.mission ? missionView() : l.dialogue.map((item, d) => row(item, l.id + ".d" + d, true)).join("")}</details>`;
   }
   if (
     !trip &&

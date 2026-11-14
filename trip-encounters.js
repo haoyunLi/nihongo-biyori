@@ -1,3 +1,4 @@
+import { changePlans, changeChoice } from "./trip-changes.js";
 import {
   followPlan,
   exitOptions,
@@ -8,7 +9,7 @@ import {
 // Each encounter replaces two turns in place: a decision, then a different
 // spoken follow-up for each intent. No fork adds time to the day's itinerary.
 import { weeklyTrips } from "./weekly-trips.js?v=19";
-import { chapterTurns, chapterAnswer } from "./chapter-talk-data.js";
+import { chapterTurns, chapterAnswer } from "./chapter-talk-data.js?v=20";
 import { normalise } from "./talk-engine.js?v=13";
 import {
   tripQuestion,
@@ -513,6 +514,43 @@ for (const [w, pair] of encounters.entries()) {
     const trip = weeklyTrips[w],
       root = "w" + (w + 1) + "." + v;
     e.id = root;
+    const changeNames = [
+      ["stamp"],
+      ["cakeOut", "cakeIn"],
+      ["curryHot", "curryMild"],
+      ["keychain"],
+      ["route"],
+      ["exit0", "exit1", "exit2", "exit3"],
+    ][w];
+    for (const name of changeNames) {
+      const key = "w" + (w + 1) + ".change." + name;
+      if (encounterEntries.has(key)) continue;
+      const c = changePlans[name];
+      encounterEntries.set(key, {
+        key,
+        scene: e.scene,
+        role: e.role,
+        lesson: trip.chapter,
+        trip: trip.chapter,
+        stop: e.stop,
+        change: name,
+        oldExit: c.oldExit,
+        keepChoice: c.oldExit ?? 0,
+        decision: true,
+        first: c.first,
+        alternate: c.alternate,
+        goal: c.subject,
+        setting: c.subject,
+        model: c.options[c.oldExit ?? 0].model,
+        answers: c.options,
+        choices: c.options,
+      });
+      encounterSpeech.push(
+        c.first,
+        c.alternate,
+        ...c.options.flatMap((a) => [a.model, a.ack]),
+      );
+    }
     const ask = tripQuestion(w + 1);
     const time = ask.ref === "time";
     const initiative = e.options.length;
@@ -646,6 +684,46 @@ for (const [w, pair] of encounters.entries()) {
     encounterSpeech.push(e.q, e.reword, speechLine(ask.retry));
   }
 }
+const drink = chapterTurns.get("t04.2");
+const genericServiceCue = line(
+  "お料理が決まりましたね。お飲み物は何になさいますか。|おりょうりがきまりましたね。おのみものはなにになさいますか。|主菜定好了。您想喝什么？",
+);
+encounterSpeech.push(genericServiceCue);
+const servedDishes = [
+  ["カレー", "かれー", "咖喱"],
+  ["うどん", "うどん", "乌冬面"],
+  ["親子丼", "おやこどん", "亲子丼"],
+];
+for (const [i, [dish, kana, zh]] of servedDishes.entries()) {
+  const key = "w3.serve." + i;
+  const first = line(
+    dish +
+      "を一つですね。お飲み物は何になさいますか。|" +
+      kana +
+      "をひとつですね。おのみものはなにになさいますか。|一份" +
+      zh +
+      "。您想喝什么？",
+  );
+  const alternate = line(
+    dish +
+      "とご一緒に、何かお飲みになりますか。|" +
+      kana +
+      "とごいっしょに、なにかおのみになりますか。|配" +
+      zh +
+      "，您想来点什么饮料？",
+  );
+  encounterEntries.set(key, {
+    ...drink,
+    key,
+    trip: "t08",
+    stop: 3,
+    setting: "点好的主菜是" + zh + "，想配一杯水。",
+    first,
+    alternate,
+    answers: [withPhrases(drink, "t04.2")],
+  });
+  encounterSpeech.push(first, alternate);
+}
 export function tripAttempt(
   base,
   edition,
@@ -653,6 +731,7 @@ export function tripAttempt(
   proposals = {},
   savedAnswers = {},
   skipped = {},
+  allowChanges = false,
 ) {
   if (!Number.isInteger(edition)) return base; // saved pre-branch itinerary
   const e = encounters[base.week - 1][edition % 2],
@@ -687,7 +766,9 @@ export function tripAttempt(
     // A completed turn from an earlier release keeps its original ID.
     const legacyAccepted = available && Object.hasOwn(savedAnswers, o.id);
     const legacyCounter =
-      !available && Object.hasOwn(savedAnswers, base.turns[e.index + 2]?.id);
+      !available &&
+      !Object.hasOwn(savedAnswers, o.id + ".exit") &&
+      Object.hasOwn(savedAnswers, base.turns[e.index + 2]?.id);
     if (available && !legacyAccepted) {
       agreed = proposed;
       exitId = o.id + ".exit";
@@ -718,6 +799,94 @@ export function tripAttempt(
           "，" + (skipped[exitId] ? "按示范" : "") + "约在车站" + gate.label;
     }
   }
+  if (
+    allowChanges &&
+    base.week === 6 &&
+    !timed &&
+    o.nextRef === "x13.1" &&
+    Number.isInteger(choice)
+  ) {
+    agreed = {
+      day: edition === 0 ? "tomorrow" : "today",
+      hour: edition === 0 ? 14 : 15,
+      minute: 0,
+    };
+    exitId = e.options[e.options.length - 1].id + ".exit";
+    turns[e.index + 1] = {
+      ...step(exitId, o.follow),
+      lead: proposalLines(agreed).echo,
+      meeting: agreed,
+    };
+    if (exitOptions[choices[exitId]])
+      outcome += "，约在车站" + exitOptions[choices[exitId]].label;
+  }
+  let change,
+    gateIndex = exitId ? choices[exitId] : undefined;
+  if (allowChanges) {
+    const decision = o.id + ".decision";
+    const settled = (key) => Object.hasOwn(savedAnswers, key) && !skipped[key];
+    const bought = settled(decision) && choices[decision] === 0;
+    // Direct orders also get a chance to change, before the ordinary side
+    // dish/drink question. The other route arrives here after a recommendation.
+    const directCurry =
+      base.week === 3 &&
+      choice === (edition % 2 === 0 ? 1 : 0) &&
+      settled(e.id);
+    if (directCurry) change = "curryHot";
+    else if (exitId && settled(exitId) && exitOptions[gateIndex])
+      change = "exit" + gateIndex;
+    else if (
+      base.week === 3 &&
+      (bought ||
+        (o.nextRef === "t07.1" &&
+          settled(o.id) &&
+          (choices[o.id] === 0 || !followEntry.choices)))
+    )
+      change = edition % 2 === 0 && bought ? "curryMild" : "curryHot";
+    else if (bought && base.week === 1) change = "stamp";
+    else if (settled(decision) && base.week === 2)
+      change = choices[decision] === 0 ? "cakeOut" : "cakeIn";
+    else if (bought && base.week === 4) change = "keychain";
+    else if (
+      base.week === 5 &&
+      (settled(decision) || (o.ref === "x04.0" && settled(o.id)))
+    )
+      change = "route";
+    if (change) {
+      const id = "w" + base.week + ".change." + change,
+        revision = encounterEntries.get(id);
+      const start = directCurry
+        ? e.id
+        : exitId || (settled(decision) ? decision : o.id);
+      const index = turns.findIndex((t) => t.id === start) + 1;
+      turns.splice(index, 0, {
+        ...step(id, revision.first),
+        ...(change === "route"
+          ? {
+              lead: encounterEntries.get(decision)?.choices[choices[decision]]
+                ?.ack,
+            }
+          : {}),
+        ...(agreed
+          ? { meeting: agreed, lead: proposalLines(agreed).echo }
+          : {}),
+      });
+      const pick = skipped[id] ? revision.keepChoice : choices[id];
+      const final = revision.choices[pick];
+      if (final) {
+        outcome += "，" + (skipped[id] ? "跳过改口，" : "") + final.ending;
+        if (exitId) gateIndex = pick;
+      }
+      if (directCurry) {
+        // The existing last question must make sense after either replacement.
+        const service = encounterEntries.get("w3.serve." + (pick ?? 0));
+        turns[index + 1] = step(
+          service.key,
+          final ? service.first : genericServiceCue,
+        );
+      }
+    }
+  }
   stops[e.stop].setting = e.setting;
   let intro = base.intro;
   if (base.week === 3)
@@ -732,7 +901,7 @@ export function tripAttempt(
       "到了约好的时间，你和朋友在东口会合，翻包时发现钱包不见了。";
   }
   if (exitId) {
-    const gate = exitOptions[choices[exitId]];
+    const gate = exitOptions[gateIndex];
     stops[1].place = gate ? gate.label + "服务台" : "车站服务台";
     stops[1].setting = gate
       ? "到了" +
@@ -742,16 +911,32 @@ export function tripAttempt(
         "会合，发现钱包不见了。"
       : "到了约定的时间，你和朋友会合，发现钱包不见了。";
   }
+  if (allowChanges && base.week === 3) {
+    // Annotate only the stages where a curry can actually be ordered.
+    const curryChoices = new Map([[e.id, edition % 2 === 0 ? 1 : 0]]);
+    if (o.nextRef === "t07.1")
+      curryChoices.set(o.id, followEntry.choices ? 0 : null);
+    if (followEntry.followup) curryChoices.set(o.id + ".decision", 0);
+    for (const t of turns) {
+      if (!curryChoices.has(t.id)) continue;
+      t.curryChoice = curryChoices.get(t.id);
+      t.curryRevision =
+        edition % 2 === 0 && t.id.endsWith(".decision")
+          ? "w3.change.curryMild"
+          : "w3.change.curryHot";
+    }
+  }
   return {
     ...base,
     title:
-      exitId && exitOptions[choices[exitId]]
-        ? "约在" + exitOptions[choices[exitId]].label + "，一起去看展"
+      exitId && exitOptions[gateIndex]
+        ? "约在" + exitOptions[gateIndex].label + "，一起去看展"
         : base.title,
     stops,
     turns,
     intro,
     finish: endings[base.week - 1],
+    allowChanges,
     encounter: e.name,
     outcome,
     edition,
@@ -761,14 +946,101 @@ export const assignedEntry = (id) =>
   encounterEntries.get(id) || chapterTurns.get(id);
 export function assignedAnswer(entry, raw, target, options = {}) {
   if (!entry.answers) return chapterAnswer(entry, raw);
+  // An explicitly corrected commitment counts as the two spoken acts in one
+  // breath. Only the original agreement and the final target are persisted.
+  const mealChoice = options.curryChoice;
+  if (
+    options.allowChanges &&
+    target == null &&
+    !options.initiating &&
+    (entry.gate || mealChoice !== undefined)
+  ) {
+    const parts = normalise(raw).match(
+      /^(.+?)(?:じゃなくて|ではなくて|(?:あっ?|えっと)?やっぱり|から)(.+)$/u,
+    );
+    if (parts) {
+      // With "instead of curry", naming the source is enough even on the
+      // yes/no order question, whose ordinary answer is a complete order.
+      const previous =
+        mealChoice != null && /^(?:野菜の?|やさいの?)?かれー$/u.test(parts[1])
+          ? entry.answers[mealChoice].model.jp
+          : parts[1];
+      const first = assignedAnswer(entry, previous, undefined, {
+        ...options,
+        allowChanges: false,
+      });
+      if (
+        first.kind === "ok" &&
+        (entry.gate || (first.choice ?? null) === mealChoice)
+      ) {
+        const id = entry.gate
+          ? "w6.change.exit" + first.choice
+          : options.curryRevision || "w3.change.curryHot";
+        const revision = assignedEntry(id);
+        const last = assignedAnswer(revision, raw, undefined, {
+          meeting: options.meeting,
+        });
+        if (last.kind === "ok" && last.choice !== revision.keepChoice)
+          return {
+            ...first,
+            repair: { id, choice: last.choice },
+            replies: last.replies,
+          };
+      }
+    }
+  }
+  if (entry.change) {
+    const index = changeChoice(entry, raw, options.meeting);
+    if (Number.isInteger(index) && (target == null || index === target)) {
+      const a = entry.choices[index];
+      return {
+        kind: "ok",
+        next: null,
+        choice: index,
+        model: a.model.jp,
+        replies: [
+          ...(validProposal(options.meeting)
+            ? [proposalLines(options.meeting).echo]
+            : []),
+          a.ack,
+        ],
+      };
+    }
+    if (
+      /^(?:もう一度|もういちど|もう一回)(?:お願いします|おねがいします)?$/u.test(
+        normalise(raw),
+      )
+    )
+      return { kind: "repeat" };
+    return {
+      kind: "unclear",
+      message:
+        entry.oldExit != null
+          ? "朋友还没听清最后在哪个出口见。原约定还在，试着只说一个出口。"
+          : "对方还没听清最后的选择。可以只说想换的那一样，也可以说照旧。",
+    };
+  }
   if (entry.decision) {
     const clean = (s) =>
       normalise(s)
         .replace(/^(?:すみません|じゃあ|では|はい)(?=.)/u, "")
         .replace(/口出会(?=いませんか|いましょう|おう)/gu, "口で会");
-    const text = clean(raw)
+    let text = clean(raw)
       .split(/じゃなくて|ではなくて/u)
       .at(-1);
+    if (entry.gate) {
+      const repair = text.match(/^(.+?)(?:あっ?|えっと)?やっぱり(.+)$/u);
+      if (
+        repair &&
+        exitOptions.some((a) =>
+          [a.model.jp, a.model.kana, ...a.aliases].some(
+            (s) => clean(s) === repair[1],
+          ),
+        )
+      )
+        text = clean(repair[2]);
+      else text = text.replace(/^やっぱり/u, "");
+    }
     const matches = entry.answers.flatMap((a, i) =>
       [a.model.jp, a.model.kana, ...a.aliases].some((x) => clean(x) === text)
         ? [i]

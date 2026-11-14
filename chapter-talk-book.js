@@ -1,13 +1,13 @@
 // Each record gets its own storage key so different chapters and different
 // missed turns can be saved independently across tabs.
-import { chapterTalks, chapterTurns } from "./chapter-talk-data.js";
+import { chapterTalks, chapterTurns } from "./chapter-talk-data.js?v=20";
 import { tripByChapter } from "./weekly-trips.js?v=19";
 import { validProposal } from "./trip-questions.js";
 import {
   encounterEntries,
   tripAttempt,
   assignedEntry,
-} from "./trip-encounters.js?v=19";
+} from "./trip-encounters.js?v=20";
 const retryKeys = [...chapterTurns.keys(), ...encounterEntries.keys()];
 const prefix = "nihongo-biyori-chapter-talk-v1:";
 export function createChapterBook(storage, readDay) {
@@ -56,12 +56,14 @@ export function createChapterBook(storage, readDay) {
         (e.record.reviewed === day ||
           (Number.isInteger(e.record.due) && e.record.due <= day)),
     ).length;
-    const limit = Math.min(6, Math.max(3, tripReviews));
+    const limit = Math.min(7, Math.max(3, tripReviews));
     return ready
       .sort(
         (a, b) =>
           Number(Boolean(b.record.trip)) - Number(Boolean(a.record.trip)) ||
           a.record.due - b.record.due ||
+          Number(!!assignedEntry(b.key)?.change) -
+            Number(!!assignedEntry(a.key)?.change) ||
           a.key.localeCompare(b.key),
       )
       .slice(0, Math.max(0, limit - already))
@@ -159,6 +161,7 @@ export function createChapterBook(storage, readDay) {
       data.proposals,
       data.answers,
       data.skipped,
+      data.allowChanges ?? !old,
     );
     const records = [],
       items = [];
@@ -176,7 +179,12 @@ export function createChapterBook(storage, readDay) {
             : {}),
         });
       else
-        items.push({ ...t, variant: 0, initiating: data.initiating === t.id });
+        items.push({
+          ...t,
+          ...(trip.allowChanges ? { allowChanges: true } : {}),
+          variant: 0,
+          initiating: data.initiating === t.id,
+        });
     }
     return {
       records,
@@ -190,7 +198,7 @@ export function createChapterBook(storage, readDay) {
     const slot = "week:" + id,
       data = checkpoint(slot);
     if (data.answers?.[key]) return;
-    const { edition, items } = tripState(id);
+    const { edition, items, trip } = tripState(id);
     const entry = assignedEntry(key);
     settle(
       key,
@@ -198,11 +206,16 @@ export function createChapterBook(storage, readDay) {
       false,
       0,
       id,
-      data.initiating === key ? entry.initiative : undefined,
+      entry.change
+        ? entry.choices.findIndex((_, i) => i !== entry.keepChoice)
+        : data.initiating === key
+          ? entry.initiative
+          : undefined,
       undefined,
       items.find((t) => t.id === key)?.meeting,
     );
     patch(slot, {
+      allowChanges: !!trip.allowChanges,
       edition,
       pending: {
         ...data.pending,
@@ -210,11 +223,19 @@ export function createChapterBook(storage, readDay) {
       },
     });
   }
-  function tripAnswer(id, key, flags, choice, skipped = false, proposal) {
+  function tripAnswer(
+    id,
+    key,
+    flags,
+    choice,
+    skipped = false,
+    proposal,
+    repair,
+  ) {
     const slot = "week:" + id,
       data = checkpoint(slot);
     if (!encounterEntries.get(key)?.choices) choice = undefined;
-    const { edition, items } = tripState(id);
+    const { edition, items, trip } = tripState(id);
     if (items[0]?.id !== key) return;
     const used = [...new Set([...(data.pending?.[key] || []), ...flags])];
     // Assistance was queued at the moment it was used, even if the learner
@@ -226,11 +247,18 @@ export function createChapterBook(storage, readDay) {
       if (Number.isInteger(retry?.due))
         write("retry:" + key, {
           ...retry,
-          choice,
+          choice:
+            skipped && assignedEntry(key).change
+              ? (retry.choice ??
+                assignedEntry(key).choices.findIndex(
+                  (_, i) => i !== assignedEntry(key).keepChoice,
+                ))
+              : choice,
           proposal: validProposal(proposal) ? proposal : undefined,
         });
     }
-    patch(slot, {
+    const update = {
+      allowChanges: !!trip.allowChanges,
       edition,
       answers: { ...data.answers, [key]: used },
       ...(validProposal(proposal)
@@ -242,13 +270,67 @@ export function createChapterBook(storage, readDay) {
             skipped: { ...data.skipped, [key]: skipped },
           }
         : {}),
-    });
+    };
+    if (!skipped && repair && trip.allowChanges) {
+      // Resolve and save both choices in one localStorage write. An incomplete
+      // or stale repair cannot skip a different question.
+      const projected = tripAttempt(
+        tripByChapter.get(id),
+        edition,
+        update.choices ?? data.choices,
+        update.proposals ?? data.proposals,
+        update.answers,
+        update.skipped ?? data.skipped,
+        true,
+      );
+      const following =
+        projected.turns[projected.turns.findIndex((t) => t.id === key) + 1];
+      if (
+        following?.id === repair.id &&
+        assignedEntry(repair.id)?.change &&
+        assignedEntry(repair.id).choices[repair.choice]
+      ) {
+        update.answers[repair.id] = used;
+        if (used.length) {
+          // Assistance belonged to the corrected utterance. Schedule its
+          // final meaning once; keep an older, independently due question.
+          const oldRetry = read("retry:" + key);
+          if (oldRetry?.due === readDay() + 1)
+            write("retry:" + key, { ...oldRetry, due: null });
+          settle(
+            repair.id,
+            used,
+            false,
+            0,
+            id,
+            repair.choice,
+            undefined,
+            following.meeting,
+          );
+          update.answers[key] = [];
+        }
+        update.choices = {
+          ...(update.choices ?? data.choices),
+          [repair.id]: repair.choice,
+        };
+        update.skipped = {
+          ...(update.skipped ?? data.skipped),
+          [repair.id]: false,
+        };
+      }
+    }
+    patch(slot, update);
   }
   function startQuestion(id, key) {
     const next = tripState(id).items[0];
     if (next?.id !== key || !Number.isInteger(assignedEntry(key)?.initiative))
       return;
-    patch("week:" + id, { initiating: key, edition: tripState(id).edition });
+    const { edition, trip } = tripState(id);
+    patch("week:" + id, {
+      initiating: key,
+      edition,
+      allowChanges: !!trip.allowChanges,
+    });
     const retry = read("retry:" + key);
     if (Number.isInteger(retry?.due))
       write("retry:" + key, {
@@ -260,6 +342,7 @@ export function createChapterBook(storage, readDay) {
   function restartTrip(id) {
     const current = tripState(id).edition;
     patch("week:" + id, {
+      allowChanges: true,
       edition: current == null ? 0 : (current + 1) % 2,
       answers: {},
       pending: {},

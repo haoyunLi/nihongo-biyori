@@ -1,3 +1,4 @@
+import {changeExamples} from "./trip-changes.js";
 import {followPlan, exitOptions} from "./trip-followups.js";
 import {tripByChapter} from "./weekly-trips.js?v=19";
 import {extensionLessons} from "./daily-extension.js?v=19";
@@ -1699,6 +1700,7 @@ for (const lesson of lessons) {
   if (trip) {
     const example = trip.week===6 ? exitOptions[1].model : followPlan(trip.week,0).ask;
     lesson.steps.at(-1).examples.push(example);
+    lesson.changeExample = changeExamples[trip.week-1];
   }
   lesson.stageMinutes.push(trip ? 1 : 2, 2, trip?.minutes || 3);
   lesson.minutes=lesson.reviewMinutes+lesson.stageMinutes.reduce((sum,n)=>sum+n,0);
