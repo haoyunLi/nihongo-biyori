@@ -15,7 +15,7 @@ self.onmessage = async ({ data }) => {
   let result;
   try {
     resources ??= Promise.all([
-      asset("plans.json?v=17", "json"),
+      asset("plans.json?v=18", "json"),
       asset("model.json", "json"),
       asset("jnas.f32", "arrayBuffer"),
     ])

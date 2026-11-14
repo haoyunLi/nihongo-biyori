@@ -1,4 +1,4 @@
-import { lessons } from "./lessons.js?v=17";
+import { lessons } from "./lessons.js?v=18";
 import { talks } from "./talk-data.js?v=13";
 import { normalise } from "./talk-engine.js?v=13";
 

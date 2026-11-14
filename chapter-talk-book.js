@@ -2,11 +2,12 @@
 // missed turns can be saved independently across tabs.
 import { chapterTalks, chapterTurns } from "./chapter-talk-data.js";
 import { tripByChapter } from "./weekly-trips.js";
+import { validProposal } from "./trip-questions.js";
 import {
   encounterEntries,
   tripAttempt,
   assignedEntry,
-} from "./trip-encounters.js";
+} from "./trip-encounters.js?v=18";
 const retryKeys = [...chapterTurns.keys(), ...encounterEntries.keys()];
 const prefix = "nihongo-biyori-chapter-talk-v1:";
 export function createChapterBook(storage, readDay) {
@@ -71,6 +72,9 @@ export function createChapterBook(storage, readDay) {
           ? { choice: e.record.choice }
           : {}),
         ...(e.record.trip ? { trip: e.record.trip } : {}),
+        ...(validProposal(e.record.proposal)
+          ? { proposal: e.record.proposal }
+          : {}),
       }));
   }
   function reviewMinutes(day = readDay()) {
@@ -79,7 +83,7 @@ export function createChapterBook(storage, readDay) {
     ).length;
     return done + due(day).length > 3 ? 3 : 2;
   }
-  function settle(id, flags, review, variant = 0, trip, choice) {
+  function settle(id, flags, review, variant = 0, trip, choice, proposal) {
     const day = readDay(),
       missed = flags.length > 0,
       key = "retry:" + id,
@@ -95,12 +99,15 @@ export function createChapterBook(storage, readDay) {
         reviewed: day,
         variant: 1 - variant,
         choice: choice ?? old.choice,
+        proposal: proposal ?? old.proposal,
       });
     } else if (missed) {
       write(key, {
         ...old,
         trip: trip || (Number.isInteger(old.due) ? old.trip : undefined),
         choice: choice ?? (Number.isInteger(old.due) ? old.choice : undefined),
+        proposal:
+          proposal ?? (Number.isInteger(old.due) ? old.proposal : undefined),
         due: Number.isInteger(old.due) ? Math.min(old.due, day + 1) : day + 1,
         variant: old.due == null ? 1 : old.variant,
       });
@@ -131,7 +138,12 @@ export function createChapterBook(storage, readDay) {
     const old =
       Object.hasOwn(data, "answers") || Object.hasOwn(data, "pending");
     const edition = data.edition ?? (old ? null : 0);
-    const trip = tripAttempt(tripByChapter.get(id), edition, data.choices);
+    const trip = tripAttempt(
+      tripByChapter.get(id),
+      edition,
+      data.choices,
+      data.proposals,
+    );
     const records = [],
       items = [];
     for (const t of trip.turns) {
@@ -140,11 +152,15 @@ export function createChapterBook(storage, readDay) {
         records.push({
           id: t.id,
           flags,
+          ...(validProposal(data.proposals?.[t.id])
+            ? { proposal: data.proposals[t.id] }
+            : {}),
           ...(Number.isInteger(data.choices?.[t.id])
             ? { choice: data.choices[t.id], skipped: !!data.skipped?.[t.id] }
             : {}),
         });
-      else items.push({ ...t, variant: 0 });
+      else
+        items.push({ ...t, variant: 0, initiating: data.initiating === t.id });
     }
     return {
       records,
@@ -159,7 +175,15 @@ export function createChapterBook(storage, readDay) {
       data = checkpoint(slot);
     if (data.answers?.[key]) return;
     const { edition } = tripState(id);
-    settle(key, [flag], false, 0, id);
+    const entry = assignedEntry(key);
+    settle(
+      key,
+      [flag],
+      false,
+      0,
+      id,
+      data.initiating === key ? entry.initiative : undefined,
+    );
     patch(slot, {
       edition,
       pending: {
@@ -168,7 +192,7 @@ export function createChapterBook(storage, readDay) {
       },
     });
   }
-  function tripAnswer(id, key, flags, choice, skipped = false) {
+  function tripAnswer(id, key, flags, choice, skipped = false, proposal) {
     const slot = "week:" + id,
       data = checkpoint(slot);
     if (!encounterEntries.get(key)?.choices) choice = undefined;
@@ -178,14 +202,21 @@ export function createChapterBook(storage, readDay) {
     // finished this turn on a later date after independently clearing its retry.
     if (flags.some((f) => !data.pending?.[key]?.includes(f)))
       settle(key, flags, false, 0, id, choice);
-    if (Number.isInteger(choice) && used.length) {
+    if ((Number.isInteger(choice) || validProposal(proposal)) && used.length) {
       const retry = read("retry:" + key);
       if (Number.isInteger(retry?.due))
-        write("retry:" + key, { ...retry, choice });
+        write("retry:" + key, {
+          ...retry,
+          choice,
+          proposal: validProposal(proposal) ? proposal : undefined,
+        });
     }
     patch(slot, {
       edition,
       answers: { ...data.answers, [key]: used },
+      ...(validProposal(proposal)
+        ? { proposals: { ...data.proposals, [key]: proposal } }
+        : {}),
       ...(Number.isInteger(choice)
         ? {
             choices: { ...data.choices, [key]: choice },
@@ -193,6 +224,19 @@ export function createChapterBook(storage, readDay) {
           }
         : {}),
     });
+  }
+  function startQuestion(id, key) {
+    const next = tripState(id).items[0];
+    if (next?.id !== key || !Number.isInteger(assignedEntry(key)?.initiative))
+      return;
+    patch("week:" + id, { initiating: key, edition: tripState(id).edition });
+    const retry = read("retry:" + key);
+    if (Number.isInteger(retry?.due))
+      write("retry:" + key, {
+        ...retry,
+        choice: assignedEntry(key).initiative,
+        proposal: undefined,
+      });
   }
   function restartTrip(id) {
     const current = tripState(id).edition;
@@ -202,6 +246,8 @@ export function createChapterBook(storage, readDay) {
       pending: {},
       choices: {},
       skipped: {},
+      proposals: {},
+      initiating: null,
     });
   }
   return {
@@ -215,6 +261,7 @@ export function createChapterBook(storage, readDay) {
     tripState,
     tripHelp,
     tripAnswer,
+    startQuestion,
     restartTrip,
   };
 }

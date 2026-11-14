@@ -1,28 +1,28 @@
 import { chapterTalks } from "./chapter-talk-data.js";
-import { createChapterBook } from "./chapter-talk-book.js?v=17";
+import { createChapterBook } from "./chapter-talk-book.js?v=18";
 import { weeklyTrips, tripByChapter, weekURL } from "./weekly-trips.js";
-import { createTalk, validTalk, talkLink } from "./talk-view.js?v=17";
+import { createTalk, validTalk, talkLink } from "./talk-view.js?v=18";
 import {
   chapterIds,
   chapterOf,
   dailyChapter,
   routeView,
-} from "./chapter-path.js?v=17";
+} from "./chapter-path.js?v=18";
 import {
   createCounter,
   counterLessonBlock,
   counterLessonLinks,
   validCounter,
 } from "./counter-view.js?v=13";
-import { questions } from "./question-bank.js?v=17";
+import { questions } from "./question-bank.js?v=18";
 import { sources } from "./screen-lessons.js";
 import { tripTasks } from "./travel-finish.js?v=13";
-import { localDay, scheduleMistake, updateBook } from "./recall.js?v=17";
+import { localDay, scheduleMistake, updateBook } from "./recall.js?v=18";
 import {
   activityTitles,
   createListening,
 } from "./listening-activities.js?v=10";
-import { createRecorder, recordingButton } from "./recording.js?v=17";
+import { createRecorder, recordingButton } from "./recording.js?v=18";
 import { contrastById } from "./contrast-data.js";
 import {
   contrastView,
@@ -30,9 +30,9 @@ import {
   handleContrast,
   stopContrast,
   leaveContrast,
-} from "./contrast-view.js?v=17";
-import { lessons, references } from "./lessons.js?v=17";
-import { createPractice } from "./practice.js?v=17";
+} from "./contrast-view.js?v=18";
+import { lessons, references } from "./lessons.js?v=18";
+import { createPractice } from "./practice.js?v=18";
 import { sceneById } from "./scenes.js";
 import { kanaRows, kanaNotes, extraKana } from "./kana.js";
 import { strokes } from "./strokes.js?v=3";
@@ -44,8 +44,8 @@ import {
   handleGuide,
   changeGuideRow,
   stopGuidePlayback,
-} from "./guide-view.js?v=17";
-import { speak, stopAudio } from "./audio.js?v=17";
+} from "./guide-view.js?v=18";
+import { speak, stopAudio } from "./audio.js?v=18";
 
 const tracks = [
   {
@@ -251,8 +251,16 @@ function tripSetup(trip) {
     items: progress().items,
     label: "每周实战 · 第 " + trip.week + " 周",
     help: (key, flag) => chapterBook.tripHelp(id, key, flag),
+    startQuestion: (key) => chapterBook.startQuestion(id, key),
     result: (r) =>
-      chapterBook.tripAnswer(id, r.id, r.flags, r.choice, r.skipped),
+      chapterBook.tripAnswer(
+        id,
+        r.id,
+        r.flags,
+        r.choice,
+        r.skipped,
+        r.proposal,
+      ),
     complete: () => finishChapter(id),
     restart: () => {
       chapterBook.restartTrip(id);
@@ -300,7 +308,15 @@ function chapterTalkSetup(id, review) {
     },
     result: (r, variant) => {
       if (review)
-        chapterBook.settle(r.id, r.flags, true, variant, undefined, r.choice);
+        chapterBook.settle(
+          r.id,
+          r.flags,
+          true,
+          variant,
+          undefined,
+          r.choice,
+          r.proposal,
+        );
       else chapterBook.markTurn(r.id, r.flags);
     },
     complete: () => {

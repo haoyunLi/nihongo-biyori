@@ -3,6 +3,20 @@
 import { weeklyTrips } from "./weekly-trips.js";
 import { chapterTurns, chapterAnswer } from "./chapter-talk-data.js";
 import { normalise } from "./talk-engine.js?v=13";
+import {
+  tripQuestion,
+  walkQuestion,
+  proposalExample,
+  readProposal,
+  validProposal,
+  timeAvailable,
+  proposalLines,
+  availableReply,
+  busyReply,
+  clockSpeech,
+  speechLine,
+  questionForm,
+} from "./trip-questions.js";
 
 const line = (s) => {
   const [jp, kana, zh] = s.split("|");
@@ -399,7 +413,13 @@ const encounters = [
 ];
 
 export const encounterEntries = new Map();
-export const encounterSpeech = [];
+export const encounterSpeech = [
+  ...clockSpeech,
+  walkQuestion,
+  proposalExample,
+  availableReply,
+  busyReply,
+];
 const endings = [
   "和朋友碰了面，吃过午饭，你也为奶奶挑好了明信片。",
   "你逛过同好集市、选了徽章，也在食堂点到了自己想要的东西。",
@@ -486,6 +506,25 @@ for (const [w, pair] of encounters.entries()) {
     const trip = weeklyTrips[w],
       root = "w" + (w + 1) + "." + v;
     e.id = root;
+    const ask = tripQuestion(w + 1);
+    const time = ask.ref === "time";
+    const initiative = e.options.length;
+    const src = time
+      ? { model: proposalExample, aliases: [] }
+      : ask.ref === "walk"
+        ? { model: walkQuestion, aliases: [] }
+        : { ...chapterTurns.get(ask.ref), aliases: [] };
+    const option = {
+      ref: ask.ref,
+      ending: ask.ending,
+      nextRef: time ? "x13.1" : ask.nextRef,
+      situation: time
+        ? "朋友接受了你提出的时间。你想和他约在车站东口。"
+        : ask.situation,
+      follow: time ? availableReply : speechLine(ask.follow),
+      aliases: ask.aliases || [],
+    };
+    e.options.push(option);
     const common = {
       lesson: trip.chapter,
       scene: e.scene,
@@ -494,9 +533,10 @@ for (const [w, pair] of encounters.entries()) {
       stop: e.stop,
     };
     e.options.forEach((o, n) => {
-      const src = extra[o.ref] || chapterTurns.get(o.ref),
+      const source =
+          n === initiative ? src : extra[o.ref] || chapterTurns.get(o.ref),
         follow = chapterTurns.get(o.nextRef);
-      o.answer = withPhrases(src, o.ref, o.aliases);
+      o.answer = withPhrases(source, o.ref, o.aliases);
       o.id = root + "." + n;
       const step = {
         ...common,
@@ -511,6 +551,20 @@ for (const [w, pair] of encounters.entries()) {
       };
       encounterEntries.set(o.id, step);
       encounterSpeech.push(o.follow);
+      if (time && n === initiative) {
+        const counter = chapterTurns.get("x12.1");
+        encounterEntries.set(o.id + ".later", {
+          ...step,
+          key: o.id + ".later",
+          first: busyReply,
+          alternate: counter.alternate,
+          goal: "朋友这个时间还在上课。改约明天，自己再提一个下午的时间。",
+          setting: "朋友这个时间还在上课。改约明天，自己再提一个下午的时间。",
+          model: proposalExample,
+          answers: [{ model: proposalExample, aliases: [] }],
+          counterTime: true,
+        });
+      }
     });
     const answers = e.options.map((o) => o.answer);
     encounterEntries.set(root, {
@@ -523,11 +577,16 @@ for (const [w, pair] of encounters.entries()) {
       model: answers[0].model,
       answers,
       choices: e.options,
+      initiative,
+      initiativeTask: ask.task,
+      initiativeRetry: speechLine(ask.retry),
+      time,
+      edition: v,
     });
-    encounterSpeech.push(e.q, e.reword);
+    encounterSpeech.push(e.q, e.reword, speechLine(ask.retry));
   }
 }
-export function tripAttempt(base, edition, choices = {}) {
+export function tripAttempt(base, edition, choices = {}, proposals = {}) {
   if (!Number.isInteger(edition)) return base; // saved pre-branch itinerary
   const e = encounters[base.week - 1][edition % 2],
     choice = choices[e.id];
@@ -536,6 +595,26 @@ export function tripAttempt(base, edition, choices = {}) {
     stops = base.stops.map((s) => ({ ...s }));
   const step = (key, cue) => ({ id: key, cue, stop: e.stop });
   turns.splice(e.index, 2, step(e.id, e.q), step(o.id, o.follow));
+  const proposed = proposals[e.id],
+    timed = e.options[choice]?.ref === "time" && validProposal(proposed);
+  let outcome = choice !== undefined ? o.ending : "";
+  if (timed) {
+    const { echo, label } = proposalLines(proposed),
+      available = timeAvailable(proposed, edition);
+    const follow = step(
+      o.id + (available ? "" : ".later"),
+      available ? availableReply : busyReply,
+    );
+    follow.lead = echo;
+    turns[e.index + 1] = follow;
+    outcome = "提议" + label + "见面";
+    if (!available && validProposal(proposals[follow.id])) {
+      const revised = proposalLines(proposals[follow.id]);
+      outcome += "，最后约在" + revised.label;
+      if (turns[e.index + 2])
+        turns[e.index + 2] = { ...turns[e.index + 2], lead: revised.echo };
+    }
+  }
   stops[e.stop].setting = e.setting;
   let intro = base.intro;
   if (base.week === 3)
@@ -556,14 +635,53 @@ export function tripAttempt(base, edition, choices = {}) {
     intro,
     finish: endings[base.week - 1],
     encounter: e.name,
-    outcome: choice !== undefined ? o.ending : "",
+    outcome,
     edition,
   };
 }
 export const assignedEntry = (id) =>
   encounterEntries.get(id) || chapterTurns.get(id);
-export function assignedAnswer(entry, raw, target) {
+export function assignedAnswer(entry, raw, target, options = {}) {
   if (!entry.answers) return chapterAnswer(entry, raw);
+  const propose = entry.time || entry.counterTime;
+  const proposal = propose
+    ? readProposal(raw, entry.counterTime ? 0 : entry.edition)
+    : null;
+  const sameTime = (p) =>
+    !options.proposal ||
+    ["day", "hour", "minute"].every((k) => p[k] === options.proposal[k]);
+  const proposalResult = () => ({
+    kind: "ok",
+    next: null,
+    replies: entry.counterTime ? [proposalLines(proposal).echo] : [],
+    model: proposalLines(proposal).model.jp,
+    choice: entry.initiative,
+    proposal,
+  });
+  if (entry.counterTime) {
+    if (proposal?.day === "tomorrow" && sameTime(proposal))
+      return proposalResult();
+    if (chapterAnswer(entry.answers[0], raw).kind === "repeat")
+      return { kind: "repeat" };
+    return { kind: "unclear" };
+  }
+  if (
+    entry.time &&
+    proposal &&
+    (options.initiating || target === entry.initiative) &&
+    sameTime(proposal)
+  )
+    return proposalResult();
+  const directProposal =
+    entry.time &&
+    proposal &&
+    (target == null || target === entry.initiative) &&
+    sameTime(proposal) &&
+    (/どう|いかが|会いま|会おう|にしよ|にしま|会えますか/u.test(raw) ||
+      ![14, 15].includes(proposal.hour) ||
+      proposal.minute !== 0 ||
+      (entry.edition === 1 && proposal.day === "tomorrow"));
+  if (directProposal) return proposalResult();
   // Compare complete intents. A mentioned time/place in a refusal must not
   // choose that branch; a self-correction uses the final, affirmed choice.
   const corrected = normalise(raw)
@@ -577,11 +695,25 @@ export function assignedAnswer(entry, raw, target) {
     .split(/じゃなくて|ではなくて|じゃなく|ではなく/u)
     .at(-1);
   if (!corrected) return { kind: "unclear" };
-  const decisions = entry.answers.map((a) =>
-    chapterAnswer({ ...a, base: null }, corrected),
-  );
+  const decisions = entry.answers.map((a, i) => {
+    if (entry.time && i === entry.initiative) return { kind: "unclear" };
+    if (i === entry.initiative) {
+      const clean = (x) => normalise(questionForm(x));
+      const match = [a.model.jp, a.model.kana, ...a.aliases].some(
+        (x) => clean(x) === clean(raw),
+      );
+      return match
+        ? { kind: "ok", next: null, replies: [], model: a.model.jp }
+        : { kind: "unclear" };
+    }
+    return chapterAnswer({ ...a, base: null }, corrected);
+  });
   const matches = decisions.flatMap((r, i) => (r.kind === "ok" ? [i] : []));
-  if (matches.length === 1 && (target == null || matches[0] === target))
+  if (
+    matches.length === 1 &&
+    (target == null || matches[0] === target) &&
+    (!options.initiating || matches[0] === entry.initiative)
+  )
     return {
       ...decisions[matches[0]],
       choice: entry.choices ? matches[0] : undefined,

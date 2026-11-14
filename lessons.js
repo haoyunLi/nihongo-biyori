@@ -1,5 +1,5 @@
 import {tripByChapter} from "./weekly-trips.js";
-import {extensionLessons} from "./daily-extension.js";
+import {extensionLessons} from "./daily-extension.js?v=18";
 import {addCounterChecks} from "./counter-data.js";
 import {addBridges} from "./chapter-bridges.js";
 import {travelFinish} from "./travel-finish.js?v=13";

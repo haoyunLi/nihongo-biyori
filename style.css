@@ -2381,3 +2381,6 @@ footer > div {
 .trip-optional { margin:1rem 0; }
 .trip-optional summary { color:var(--sage); }
 @media(max-width:480px){ .trip-card{flex-direction:column;align-items:flex-start;gap:.4rem} }
+
+.talk-initiative {display:flex;flex-wrap:wrap;gap:.45rem 1rem;align-items:center;padding:.65rem .8rem;border-inline-start:3px solid var(--line);margin:.6rem 0}
+.talk-initiative p {flex:1 1 16rem;margin:0}

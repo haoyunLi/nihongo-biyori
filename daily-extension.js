@@ -1,3 +1,4 @@
+import {walkQuestion,proposalExample} from "./trip-questions.js";
 import { talks } from "./talk-data.js?v=13";
 
 // Each pair picks a real prompt and one branch. The distractor is another
@@ -249,6 +250,8 @@ export const extensionLessons = days.map(
             .map((e) => e.model)
             .filter((m) => m.jp !== picked[i].jp)
             .slice(0, 1),
+          ...(i === 1 && id === "x07" ? [walkQuestion] : []),
+          ...(i === 1 && id === "x12" ? [proposalExample] : []),
         ],
       })),
       dialogue,
