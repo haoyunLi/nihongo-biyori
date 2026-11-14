@@ -1,4 +1,4 @@
-import { tripByChapter, weekURL } from "./weekly-trips.js";
+import { tripByChapter, weekURL } from "./weekly-trips.js?v=19";
 export const units = [
   {
     title: "第一周 · 听见一拍，认出假名",

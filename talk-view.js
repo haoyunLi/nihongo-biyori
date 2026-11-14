@@ -1,6 +1,7 @@
+import { exitContext } from "./trip-followups.js";
 import { proposalLines, validProposal } from "./trip-questions.js";
-import { assignedEntry, assignedAnswer } from "./trip-encounters.js?v=18";
-import { tripByChapter } from "./weekly-trips.js";
+import { assignedEntry, assignedAnswer } from "./trip-encounters.js?v=19";
+import { tripByChapter } from "./weekly-trips.js?v=19";
 import { talks } from "./talk-data.js?v=13";
 import {
   interpret,
@@ -129,7 +130,12 @@ export function createTalk(ctx) {
   }
   function promptLines() {
     const item = run.items?.[run.index];
-    return [item?.lead, getNode().prompt].filter(Boolean);
+    const lead =
+      item?.lead ||
+      (assignment?.review && validProposal(item?.meeting)
+        ? proposalLines(item.meeting).echo
+        : undefined);
+    return [lead, getNode().prompt].filter(Boolean);
   }
   function understand(raw) {
     if (!assignment) return interpret(scene, run.node, raw);
@@ -358,14 +364,15 @@ export function createTalk(ctx) {
     clip = [...result.replies];
     if (run.done) {
       endVoice();
-      if (run.items && !assignment?.review) clip = [];
+      if (run.items && !assignment) clip = [];
       if (assignment) assignment.complete();
       else saveReview();
       refresh();
       if (clip.length) void play(clip);
       return;
     }
-    if (run.items && !assignment?.review) clip = [];
+    if (run.items && !assignment?.review && !assignedEntry(record.id)?.decision)
+      clip = [];
     clip.push(...promptLines());
     refresh();
     void play(clip);
@@ -527,6 +534,11 @@ export function createTalk(ctx) {
             t.choices[item.choice].ending +
             "。听新的问法，再说一次。";
     }
+    if (t?.gate)
+      setting = exitContext(
+        item.meeting,
+        assignment.review ? item.choice : undefined,
+      );
     if (assignment?.review && validProposal(item.proposal))
       setting =
         "这次练习主动约" +
@@ -538,7 +550,10 @@ export function createTalk(ctx) {
       ? '<div class="talk-initiative"><p>' +
         ctx.esc(t.initiativeTask) +
         "</p>" +
-        button("initiate", t.time ? "我来提个时间" : "我来问一句") +
+        button(
+          "initiate",
+          t.followup ? "我想再问一句" : t.time ? "我来提个时间" : "我来问一句",
+        ) +
         "</div>"
       : "";
     return `<h1>${ctx.esc(trip ? trip.title : partner().title)}</h1>${assignment?.trip ? itinerary(trip, item.stop) : ""}<section class="panel talk-round"><p class="small-label">${idx} · ${partnerRole()}</p><h2>${stop ? ctx.esc(stop.place) : "听完，用日语接话"}</h2>${stop ? '<p class="trip-setting">' + ctx.esc(setting) + "</p>" : assignment ? '<p class="talk-goal">' + ctx.esc(entry().goal) + "</p>" : ""}${invitation}${lastTurn?.skipped && !run.items ? `<p class="talk-last">这句先跳过，情景按「${ctx.esc(lastTurn.model)}」继续。</p>` : lastTurn?.text && !run.items ? `<p class="talk-last">你刚才说　<span lang="ja">${ctx.esc(lastTurn.text)}</span></p>` : ""}
@@ -577,8 +592,16 @@ export function createTalk(ctx) {
       const t = a.trip,
         { records, complete } = a.progress();
       const missed = records.filter((r) => r.flags.length);
+      const lastDecision = records.at(-1);
+      const lastReply =
+        lastDecision && !lastDecision.skipped
+          ? assignedEntry(lastDecision.id)?.choices?.[lastDecision.choice]?.ack
+          : undefined;
+      const receipt = lastReply
+        ? `<div class="talk-exit"><b>对方的回应</b>${optLine(lastReply)}${button("receipt", "再听回应")}</div>`
+        : "";
       const body = complete
-        ? `<h1>本周小旅行完成</h1>${itinerary(t)}<section class="panel"><p class="small-label">第 ${t.week} 周 · ${ctx.esc(t.title)}</p><h2>${records.length - missed.length} / ${records.length} 轮独立接上</h2><p>${ctx.esc(t.finish)}</p>${t.outcome ? '<p class="trip-outcome"><b>' + (records.some((r) => r.skipped) ? "跳过选择后，行程按此继续：" : "你的选择：") + "</b>" + ctx.esc(t.outcome) + "。</p>" : ""}${
+        ? `<h1>本周小旅行完成</h1>${itinerary(t)}<section class="panel"><p class="small-label">第 ${t.week} 周 · ${ctx.esc(t.title)}</p><h2>${records.length - missed.length} / ${records.length} 轮独立接上</h2><p>${ctx.esc(t.finish)}</p>${receipt}${t.outcome ? '<p class="trip-outcome"><b>' + (records.some((r) => r.skipped) ? "跳过选择后，行程按此继续：" : "你的选择：") + "</b>" + ctx.esc(t.outcome) + "。</p>" : ""}${
             missed.length
               ? '<h3>下次换个问法</h3><ul class="talk-misses">' +
                 missed
@@ -610,10 +633,10 @@ export function createTalk(ctx) {
                     );
                   })
                   .join("") +
-                "</ul><p>下个学习日优先换问法练这些句子，和章末复习合计最多五句。</p>"
+                "</ul><p>下个学习日优先换问法练这些句子，和章末复习合计最多六句。</p>"
               : "<p>每一站你都自己接上了。</p>"
           }<div class="actions"><a class="btn primary" href="${a.returnURL}">${a.returnLabel}</a>${button("trip-restart", "换个情况再走（选做）")}</div></section>`
-        : `<h1>${ctx.esc(t.title)}</h1><p class="lead">${ctx.esc(t.intro)}</p>${itinerary(t)}<section class="practice-feature"><p class="small-label">第 ${t.week} 周 · 开口实战${t.encounter ? " · " + ctx.esc(t.encounter) : ""}</p><h2>${records.length ? "从上次停下的一站继续" : "先听，自己接话"}</h2><p>${records.length ? "已走完 " + records.length + " 轮，还有 " + a.items.length + " 轮。" : t.stops.length + " 站，" + t.turns.length + " 轮，约 " + t.minutes + " 分钟。"}听完日语，用这一周学过的话回应。遇到选择时，可以回答，也可以直接问对方。想专练主动开口，点「我来问一句」或「我来提个时间」。卡住再点提示。</p><div class="actions">${voiceAvailable() ? button("auto", "开启连续对话", true) : ""}${button("start", "逐句练习或输入日语", !voiceAvailable())}</div></section>`;
+        : `<h1>${ctx.esc(t.title)}</h1><p class="lead">${ctx.esc(t.intro)}</p>${itinerary(t)}<section class="practice-feature"><p class="small-label">第 ${t.week} 周 · 开口实战${t.encounter ? " · " + ctx.esc(t.encounter) : ""}</p><h2>${records.length ? "从上次停下的一站继续" : "先听，自己接话"}</h2><p>${records.length ? "已走完 " + records.length + " 轮，还有 " + a.items.length + " 轮。" : t.stops.length + " 站，" + t.turns.length + " 轮起，追问最多多一轮，约 " + t.minutes + " 分钟。"}听完日语，用这一周学过的话回应。遇到选择时，可以回答，也可以直接问对方。想专练主动开口，点「我来问一句」或「我来提个时间」。卡住再点提示。</p><div class="actions">${voiceAvailable() ? button("auto", "开启连续对话", true) : ""}${button("start", "逐句练习或输入日语", !voiceAvailable())}</div></section>`;
       return '<div class="inner narrow talk-page">' + back + body + "</div>";
     }
     const misses = run?.records.filter((r) => r.flags.length) || [];
@@ -648,6 +671,12 @@ export function createTalk(ctx) {
     }
     if (a === "retry" && previous.length) {
       start([...previous], preferredAuto);
+      return;
+    }
+    if (a === "receipt" && assignment?.trip) {
+      const last = assignment.progress().records.at(-1),
+        reply = last && assignedEntry(last.id)?.choices?.[last.choice]?.ack;
+      if (reply) void play([reply], false, false);
       return;
     }
     if (!run) return;

@@ -1,13 +1,13 @@
 // Each record gets its own storage key so different chapters and different
 // missed turns can be saved independently across tabs.
 import { chapterTalks, chapterTurns } from "./chapter-talk-data.js";
-import { tripByChapter } from "./weekly-trips.js";
+import { tripByChapter } from "./weekly-trips.js?v=19";
 import { validProposal } from "./trip-questions.js";
 import {
   encounterEntries,
   tripAttempt,
   assignedEntry,
-} from "./trip-encounters.js?v=18";
+} from "./trip-encounters.js?v=19";
 const retryKeys = [...chapterTurns.keys(), ...encounterEntries.keys()];
 const prefix = "nihongo-biyori-chapter-talk-v1:";
 export function createChapterBook(storage, readDay) {
@@ -56,7 +56,7 @@ export function createChapterBook(storage, readDay) {
         (e.record.reviewed === day ||
           (Number.isInteger(e.record.due) && e.record.due <= day)),
     ).length;
-    const limit = Math.min(5, Math.max(3, tripReviews));
+    const limit = Math.min(6, Math.max(3, tripReviews));
     return ready
       .sort(
         (a, b) =>
@@ -71,6 +71,9 @@ export function createChapterBook(storage, readDay) {
         ...(assignedEntry(e.key)?.choices && Number.isInteger(e.record.choice)
           ? { choice: e.record.choice }
           : {}),
+        ...(validProposal(e.record.meeting)
+          ? { meeting: e.record.meeting }
+          : {}),
         ...(e.record.trip ? { trip: e.record.trip } : {}),
         ...(validProposal(e.record.proposal)
           ? { proposal: e.record.proposal }
@@ -83,7 +86,16 @@ export function createChapterBook(storage, readDay) {
     ).length;
     return done + due(day).length > 3 ? 3 : 2;
   }
-  function settle(id, flags, review, variant = 0, trip, choice, proposal) {
+  function settle(
+    id,
+    flags,
+    review,
+    variant = 0,
+    trip,
+    choice,
+    proposal,
+    meeting,
+  ) {
     const day = readDay(),
       missed = flags.length > 0,
       key = "retry:" + id,
@@ -104,6 +116,8 @@ export function createChapterBook(storage, readDay) {
     } else if (missed) {
       write(key, {
         ...old,
+        meeting:
+          meeting ?? (Number.isInteger(old.due) ? old.meeting : undefined),
         trip: trip || (Number.isInteger(old.due) ? old.trip : undefined),
         choice: choice ?? (Number.isInteger(old.due) ? old.choice : undefined),
         proposal:
@@ -143,6 +157,8 @@ export function createChapterBook(storage, readDay) {
       edition,
       data.choices,
       data.proposals,
+      data.answers,
+      data.skipped,
     );
     const records = [],
       items = [];
@@ -174,7 +190,7 @@ export function createChapterBook(storage, readDay) {
     const slot = "week:" + id,
       data = checkpoint(slot);
     if (data.answers?.[key]) return;
-    const { edition } = tripState(id);
+    const { edition, items } = tripState(id);
     const entry = assignedEntry(key);
     settle(
       key,
@@ -183,6 +199,8 @@ export function createChapterBook(storage, readDay) {
       0,
       id,
       data.initiating === key ? entry.initiative : undefined,
+      undefined,
+      items.find((t) => t.id === key)?.meeting,
     );
     patch(slot, {
       edition,
@@ -196,12 +214,13 @@ export function createChapterBook(storage, readDay) {
     const slot = "week:" + id,
       data = checkpoint(slot);
     if (!encounterEntries.get(key)?.choices) choice = undefined;
-    const { edition } = tripState(id);
+    const { edition, items } = tripState(id);
+    if (items[0]?.id !== key) return;
     const used = [...new Set([...(data.pending?.[key] || []), ...flags])];
     // Assistance was queued at the moment it was used, even if the learner
     // finished this turn on a later date after independently clearing its retry.
     if (flags.some((f) => !data.pending?.[key]?.includes(f)))
-      settle(key, flags, false, 0, id, choice);
+      settle(key, flags, false, 0, id, choice, proposal, items[0]?.meeting);
     if ((Number.isInteger(choice) || validProposal(proposal)) && used.length) {
       const retry = read("retry:" + key);
       if (Number.isInteger(retry?.due))

@@ -1,5 +1,6 @@
-import {tripByChapter} from "./weekly-trips.js";
-import {extensionLessons} from "./daily-extension.js?v=18";
+import {followPlan, exitOptions} from "./trip-followups.js";
+import {tripByChapter} from "./weekly-trips.js?v=19";
+import {extensionLessons} from "./daily-extension.js?v=19";
 import {addCounterChecks} from "./counter-data.js";
 import {addBridges} from "./chapter-bridges.js";
 import {travelFinish} from "./travel-finish.js?v=13";
@@ -1695,6 +1696,10 @@ for (const lesson of lessons) {
   lesson.reviewMinutes=2;
   lesson.stageMinutes=lesson.steps.map((_,i)=>lesson.steps.length===4 ? (i<2?2:1) : lesson.steps.length===2?2:(i===0?2:1));
   const trip = tripByChapter.get(lesson.id);
+  if (trip) {
+    const example = trip.week===6 ? exitOptions[1].model : followPlan(trip.week,0).ask;
+    lesson.steps.at(-1).examples.push(example);
+  }
   lesson.stageMinutes.push(trip ? 1 : 2, 2, trip?.minutes || 3);
   lesson.minutes=lesson.reviewMinutes+lesson.stageMinutes.reduce((sum,n)=>sum+n,0);
 }

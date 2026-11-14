@@ -1,5 +1,5 @@
-import {encounterSpeech} from "./trip-encounters.js?v=18";
-import {weeklyTrips} from "./weekly-trips.js";
+import {encounterSpeech} from "./trip-encounters.js?v=19";
+import {weeklyTrips} from "./weekly-trips.js?v=19";
 import {chapterSpeech} from "./chapter-talk-data.js";
 import { talkSpeech } from "./talk-data.js?v=13";
 import {
@@ -10,7 +10,7 @@ import {
   guided,
   families,
 } from "./counter-data.js";
-import { lessons } from "./lessons.js?v=18";
+import { lessons } from "./lessons.js?v=19";
 import { station, animeScenes } from "./activity-data.js";
 import { contrasts } from "./contrast-data.js";
 import { scenes } from "./scenes.js";

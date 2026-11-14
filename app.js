@@ -1,28 +1,28 @@
 import { chapterTalks } from "./chapter-talk-data.js";
-import { createChapterBook } from "./chapter-talk-book.js?v=18";
-import { weeklyTrips, tripByChapter, weekURL } from "./weekly-trips.js";
-import { createTalk, validTalk, talkLink } from "./talk-view.js?v=18";
+import { createChapterBook } from "./chapter-talk-book.js?v=19";
+import { weeklyTrips, tripByChapter, weekURL } from "./weekly-trips.js?v=19";
+import { createTalk, validTalk, talkLink } from "./talk-view.js?v=19";
 import {
   chapterIds,
   chapterOf,
   dailyChapter,
   routeView,
-} from "./chapter-path.js?v=18";
+} from "./chapter-path.js?v=19";
 import {
   createCounter,
   counterLessonBlock,
   counterLessonLinks,
   validCounter,
 } from "./counter-view.js?v=13";
-import { questions } from "./question-bank.js?v=18";
+import { questions } from "./question-bank.js?v=19";
 import { sources } from "./screen-lessons.js";
 import { tripTasks } from "./travel-finish.js?v=13";
-import { localDay, scheduleMistake, updateBook } from "./recall.js?v=18";
+import { localDay, scheduleMistake, updateBook } from "./recall.js?v=19";
 import {
   activityTitles,
   createListening,
 } from "./listening-activities.js?v=10";
-import { createRecorder, recordingButton } from "./recording.js?v=18";
+import { createRecorder, recordingButton } from "./recording.js?v=19";
 import { contrastById } from "./contrast-data.js";
 import {
   contrastView,
@@ -30,9 +30,9 @@ import {
   handleContrast,
   stopContrast,
   leaveContrast,
-} from "./contrast-view.js?v=18";
-import { lessons, references } from "./lessons.js?v=18";
-import { createPractice } from "./practice.js?v=18";
+} from "./contrast-view.js?v=19";
+import { lessons, references } from "./lessons.js?v=19";
+import { createPractice } from "./practice.js?v=19";
 import { sceneById } from "./scenes.js";
 import { kanaRows, kanaNotes, extraKana } from "./kana.js";
 import { strokes } from "./strokes.js?v=3";
@@ -44,8 +44,8 @@ import {
   handleGuide,
   changeGuideRow,
   stopGuidePlayback,
-} from "./guide-view.js?v=18";
-import { speak, stopAudio } from "./audio.js?v=18";
+} from "./guide-view.js?v=19";
+import { speak, stopAudio } from "./audio.js?v=19";
 
 const tracks = [
   {
@@ -223,7 +223,7 @@ function dayBudget(l, reviewMinutes) {
   // In a 15-minute lesson the extra review minute comes from the dialogue:
   // listen to one exchange; the rest is still available as optional practice.
   const compact = l.minutes === 15 && reviewMinutes > l.reviewMinutes;
-  if (compact) stages[l.steps.length] = 1;
+  if (compact) stages[l.steps.length] = tripByChapter.has(l.id) ? 0 : 1;
   return {
     stages,
     compact,
@@ -894,6 +894,13 @@ function readerStage(l) {
       return `<div class="panel"><h2>本章接话已完成</h2><a class="btn primary" href="${lessonURL(l.id, l.steps.length + 1)}">做随堂练习，完成本章</a></div>`;
     return `<div class="panel"><p class="small-label">章末接话 · 约 3 分钟</p><h2>${esc(l.title)}</h2><p>${esc(plan.intro)}</p><a class="btn primary" href="${assignedURL(l.id)}">开始接话 · 剩 ${left.length} 轮</a></div>`;
   }
+  if (
+    trip &&
+    n === l.steps.length &&
+    dayBudget(l, chapterBook.reviewMinutes()).compact
+  ) {
+    return `<div class="panel"><h2>接着做随堂练习</h2><p>今天多留一分钟复习昨天的接话。做完小测，就去「${esc(trip.title)}」。</p><a class="btn primary" href="${lessonURL(l.id, n + 1)}">进入随堂练习</a></div>`;
+  }
   if (trip && n === l.steps.length) {
     const sample = chapterTalks.get(l.id).turns[0].model;
     return `<div class="panel"><p class="small-label">行前热身 · 1 分钟</p><h2>把今天的一句话说顺</h2><p>${esc(sample.zh)}　先自己说一次，再听示范。</p><details><summary>核对说法</summary>${spokenModel(sample)}</details><p>小测后，从「${esc(trip.stops[0].place)}」出发，走完第 ${trip.week} 周的小旅行。</p><a class="btn primary" href="${lessonURL(l.id, n + 1)}">进入随堂练习</a></div><details class="trip-optional"${l.mission && session.extraMission ? " open" : ""}><summary>选做 · ${l.mission ? "原有五个旅行任务" : "完整情景对话"}</summary>${l.mission ? missionView() : l.dialogue.map((item, d) => row(item, l.id + ".d" + d, true)).join("")}</details>`;
@@ -1062,7 +1069,7 @@ function lessonView(l) {
     " 分钟（含开口复习 " +
     review +
     " 分钟、" +
-    (tripByChapter.has(l.id) ? "本周小旅行 5 分钟）" : "章末接话 3 分钟）") +
+    (tripByChapter.has(l.id) ? "本周小旅行 6 分钟）" : "章末接话 3 分钟）") +
     "</span>" +
     (state.done.includes(l.id)
       ? '<span class="complete">' + ic("check") + " 已完成</span>"
@@ -1080,8 +1087,8 @@ function lessonView(l) {
           "</span>" +
           esc(t) +
           " · " +
-          budget.stages[i] +
-          " 分钟</button>",
+          (budget.stages[i] ? budget.stages[i] + " 分钟" : "今天免练") +
+          "</button>",
       )
       .join("") +
     '</aside><section class="stage" id="stage" tabindex="-1">' +

@@ -9,7 +9,7 @@ const trip = (chapter, title, intro, finish, ...stops) => ({
   intro,
   finish,
   stops,
-  minutes: 5,
+  minutes: 6,
   turns: stops.flatMap((s, i) => s.turns.map((t) => ({ ...t, stop: i }))),
 });
 export const weeklyTrips = [

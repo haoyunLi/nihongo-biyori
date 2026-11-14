@@ -1,6 +1,13 @@
+import {
+  followPlan,
+  exitOptions,
+  exitContext,
+  exitRetry,
+  exitCue,
+} from "./trip-followups.js";
 // Each encounter replaces two turns in place: a decision, then a different
 // spoken follow-up for each intent. No fork adds time to the day's itinerary.
-import { weeklyTrips } from "./weekly-trips.js";
+import { weeklyTrips } from "./weekly-trips.js?v=19";
 import { chapterTurns, chapterAnswer } from "./chapter-talk-data.js";
 import { normalise } from "./talk-engine.js?v=13";
 import {
@@ -549,6 +556,59 @@ for (const [w, pair] of encounters.entries()) {
         answers: [withPhrases(follow, o.nextRef)],
         origin: o.nextRef,
       };
+      if (n === initiative && !time) {
+        const f = followPlan(w + 1, v);
+        const askAnswer = { model: f.ask, aliases: f.aliases };
+        Object.assign(step, {
+          followup: true,
+          initiative: 1,
+          initiativeTask: f.task,
+          initiativeRetry: f.retry,
+          answers: [step.answers[0], askAnswer],
+          choices: [{ ending: "直接回应了对方" }, { ending: f.ending }],
+        });
+        const final = {
+          ...common,
+          key: o.id + ".decision",
+          first: f.reply,
+          alternate: f.again,
+          goal: f.decide,
+          setting: f.decide,
+          model: f.options[0].model,
+          answers: f.options,
+          choices: f.options,
+          decision: true,
+        };
+        encounterEntries.set(final.key, final);
+        encounterSpeech.push(
+          f.ask,
+          f.reply,
+          f.retry,
+          f.again,
+          ...f.options.flatMap((x) => [x.model, x.ack]),
+        );
+      }
+      if (n === initiative && time) {
+        const gate = {
+          ...common,
+          key: o.id + ".exit",
+          first: exitCue,
+          alternate: exitRetry,
+          goal: "提议车站的一个出口",
+          setting: exitContext(),
+          model: exitOptions[0].model,
+          answers: exitOptions,
+          choices: exitOptions,
+          gate: true,
+          decision: true,
+        };
+        encounterEntries.set(gate.key, gate);
+        encounterSpeech.push(
+          exitCue,
+          exitRetry,
+          ...exitOptions.flatMap((x) => [x.model, x.ack]),
+        );
+      }
       encounterEntries.set(o.id, step);
       encounterSpeech.push(o.follow);
       if (time && n === initiative) {
@@ -586,7 +646,14 @@ for (const [w, pair] of encounters.entries()) {
     encounterSpeech.push(e.q, e.reword, speechLine(ask.retry));
   }
 }
-export function tripAttempt(base, edition, choices = {}, proposals = {}) {
+export function tripAttempt(
+  base,
+  edition,
+  choices = {},
+  proposals = {},
+  savedAnswers = {},
+  skipped = {},
+) {
   if (!Number.isInteger(edition)) return base; // saved pre-branch itinerary
   const e = encounters[base.week - 1][edition % 2],
     choice = choices[e.id];
@@ -598,6 +665,15 @@ export function tripAttempt(base, edition, choices = {}, proposals = {}) {
   const proposed = proposals[e.id],
     timed = e.options[choice]?.ref === "time" && validProposal(proposed);
   let outcome = choice !== undefined ? o.ending : "";
+  let agreed, exitId;
+  const followEntry = encounterEntries.get(o.id);
+  if (followEntry.followup && choices[o.id] === followEntry.initiative) {
+    const decision = encounterEntries.get(o.id + ".decision");
+    turns.splice(e.index + 2, 0, step(decision.key, decision.first));
+    outcome += "，" + followEntry.choices[followEntry.initiative].ending;
+    const final = decision.choices[choices[decision.key]];
+    if (final) outcome += "，" + final.ending;
+  }
   if (timed) {
     const { echo, label } = proposalLines(proposed),
       available = timeAvailable(proposed, edition);
@@ -606,13 +682,40 @@ export function tripAttempt(base, edition, choices = {}, proposals = {}) {
       available ? availableReply : busyReply,
     );
     follow.lead = echo;
-    turns[e.index + 1] = follow;
     outcome = "提议" + label + "见面";
-    if (!available && validProposal(proposals[follow.id])) {
-      const revised = proposalLines(proposals[follow.id]);
-      outcome += "，最后约在" + revised.label;
-      if (turns[e.index + 2])
+    turns[e.index + 1] = follow;
+    // A completed turn from an earlier release keeps its original ID.
+    const legacyAccepted = available && Object.hasOwn(savedAnswers, o.id);
+    const legacyCounter =
+      !available && Object.hasOwn(savedAnswers, base.turns[e.index + 2]?.id);
+    if (available && !legacyAccepted) {
+      agreed = proposed;
+      exitId = o.id + ".exit";
+      turns[e.index + 1] = {
+        ...step(exitId, exitCue),
+        lead: echo,
+        meeting: agreed,
+      };
+    } else if (!available && validProposal(proposals[follow.id])) {
+      agreed = proposals[follow.id];
+      const revised = proposalLines(agreed);
+      outcome += "，改约" + revised.label;
+      if (legacyCounter && turns[e.index + 2])
         turns[e.index + 2] = { ...turns[e.index + 2], lead: revised.echo };
+      else {
+        exitId = o.id + ".exit";
+        turns.splice(e.index + 2, 0, {
+          ...step(exitId, exitCue),
+          lead: revised.echo,
+          meeting: agreed,
+        });
+      }
+    }
+    if (exitId && Number.isInteger(choices[exitId])) {
+      const gate = exitOptions[choices[exitId]];
+      if (gate)
+        outcome +=
+          "，" + (skipped[exitId] ? "按示范" : "") + "约在车站" + gate.label;
     }
   }
   stops[e.stop].setting = e.setting;
@@ -628,8 +731,23 @@ export function tripAttempt(base, edition, choices = {}, proposals = {}) {
     stops[1].setting =
       "到了约好的时间，你和朋友在东口会合，翻包时发现钱包不见了。";
   }
+  if (exitId) {
+    const gate = exitOptions[choices[exitId]];
+    stops[1].place = gate ? gate.label + "服务台" : "车站服务台";
+    stops[1].setting = gate
+      ? "到了" +
+        proposalLines(agreed).label +
+        "，你和朋友在" +
+        gate.label +
+        "会合，发现钱包不见了。"
+      : "到了约定的时间，你和朋友会合，发现钱包不见了。";
+  }
   return {
     ...base,
+    title:
+      exitId && exitOptions[choices[exitId]]
+        ? "约在" + exitOptions[choices[exitId]].label + "，一起去看展"
+        : base.title,
     stops,
     turns,
     intro,
@@ -643,6 +761,43 @@ export const assignedEntry = (id) =>
   encounterEntries.get(id) || chapterTurns.get(id);
 export function assignedAnswer(entry, raw, target, options = {}) {
   if (!entry.answers) return chapterAnswer(entry, raw);
+  if (entry.decision) {
+    const clean = (s) =>
+      normalise(s)
+        .replace(/^(?:すみません|じゃあ|では|はい)(?=.)/u, "")
+        .replace(/口出会(?=いませんか|いましょう|おう)/gu, "口で会");
+    const text = clean(raw)
+      .split(/じゃなくて|ではなくて/u)
+      .at(-1);
+    const matches = entry.answers.flatMap((a, i) =>
+      [a.model.jp, a.model.kana, ...a.aliases].some((x) => clean(x) === text)
+        ? [i]
+        : [],
+    );
+    if (matches.length === 1 && (target == null || target === matches[0])) {
+      const [index] = matches,
+        a = entry.answers[index];
+      return {
+        kind: "ok",
+        next: null,
+        model: a.model.jp,
+        choice: index,
+        replies: [
+          ...(entry.gate && validProposal(options.meeting)
+            ? [proposalLines(options.meeting).echo]
+            : []),
+          a.ack,
+        ],
+      };
+    }
+    return {
+      kind: /^(?:もう一度|もういちど|もう一回)(?:お願いします|おねがいします)?$/u.test(
+        text,
+      )
+        ? "repeat"
+        : "unclear",
+    };
+  }
   const propose = entry.time || entry.counterTime;
   const proposal = propose
     ? readProposal(raw, entry.counterTime ? 0 : entry.edition)

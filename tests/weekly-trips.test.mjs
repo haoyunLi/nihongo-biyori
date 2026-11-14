@@ -22,7 +22,7 @@ test("six itineraries end the right weeks, transfer taught replies across scenes
     assert.equal(new Set(t.turns.map((q) => q.id)).size, t.turns.length);
     const weekScenes = new Set();
     const l = lessons.find((l) => l.id === t.chapter);
-    assert.equal(l.minutes, 14);
+    assert.equal(l.minutes, 15);
     assert.equal(l.stageMinutes.at(-1), t.minutes);
     for (const v of t.turns) {
       const src = chapterTurns.get(v.id);

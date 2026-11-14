@@ -1,8 +1,8 @@
-import { questions } from "./question-bank.js?v=18";
-import { rhythmCard } from "./rhythm-review.js?v=18";
+import { questions } from "./question-bank.js?v=19";
+import { rhythmCard } from "./rhythm-review.js?v=19";
 import { contrasts } from "./contrast-data.js";
 import { kanaGuides } from "./kana-guides.js";
-import { lessons } from "./lessons.js?v=18";
+import { lessons } from "./lessons.js?v=19";
 
 const gaps = [1, 3, 7, 14, 30];
 export const dailyLimit = 5;

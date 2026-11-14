@@ -40,7 +40,7 @@ test("the learner can start a question directly in either edition in each week, 
       const next =
         route.turns[route.turns.findIndex((t) => t.id === root.key) + 1];
       assert.equal(route.turns.length, base.turns.length);
-      assert.equal(next.id, root.choices[root.initiative].id);
+      assert.equal(next.id, root.choices[root.initiative].id + (w===5 ? ".exit" : ""));
       assert.ok(clipStem(next.cue.jp));
       assert.notEqual(root.initiativeRetry.jp, root.first.jp);
       assert.ok(clipStem(root.initiativeRetry.jp));
