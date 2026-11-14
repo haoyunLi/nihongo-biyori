@@ -1,3 +1,4 @@
+import { tripByChapter, weekURL } from "./weekly-trips.js";
 export const units = [
   {
     title: "第一周 · 听见一拍，认出假名",
@@ -40,7 +41,7 @@ export function dailyChapter(done, completionDays, day) {
   );
   return { next, today, complete: !next };
 }
-export function routeView(ctx, state, day, due = 0) {
+export function routeView(ctx, state, day, due = 0, tripState) {
   const { next, today, complete } = dailyChapter(
     state.done,
     state.completionDays,
@@ -56,7 +57,7 @@ export function routeView(ctx, state, day, due = 0) {
     : today.length
       ? "今日目标已完成"
       : "今日一章";
-  return `<div class="inner narrow chapter-route"><h1>每日章节</h1><p class="lead">每天约 10–15 分钟，包含开头的复习和最后 2–3 轮接话。隔天从上次的位置接着走，也可以点任意一章提前学。<a class="text-link" href="#courses">按主题找课</a></p>
+  return `<div class="inner narrow chapter-route"><h1>每日章节</h1><p class="lead">每天约 10–15 分钟，已算入开口复习。平日用当天的句子聊 2–3 轮，每逢第 7 章，换成一趟串起本周场景的小旅行。<a class="text-link" href="#courses">按主题找课</a></p>
     <section class="chapter-today"><span class="small-label">${lead}</span><h2>${today.length ? today.map((id) => ordinal(id)).join("、") + " 已完成" : complete ? "把学过的日语用起来" : ordinal(next) + " · " + nextLesson.title}</h2>
     <p>${complete || today.length ? "今天的章内任务已完成。" : nextLesson.goal}</p><div class="actions">${due ? `<a class="btn primary" href="#practice/chapter-review/${next || "today"}">先复习上次的 ${due} 句</a>` : today.length || complete ? '<a class="tool" href="#practice/daily">额外练习（选做）</a>' : link(next, state.positions[next] ? "继续本章" : "开始本章")}${today.length && next ? link(next, "提前学下一章", "tool") : ""}<a class="tool" href="#review/mistakes">打开错题本</a></div></section>
     ${units
@@ -68,7 +69,13 @@ export function routeView(ctx, state, day, due = 0) {
                 finished = state.done.includes(id);
               return `<li class="${finished ? "learned" : id === next ? "up-next" : ""}"><a href="${anchor(id)}"><span>${l.title}</span><small>${finished ? "✓ 已完成" : id === next ? "接着学" : l.minutes + " 分钟"}</small></a></li>`;
             })
-            .join("")}</ol></section>`,
+            .join(
+              "",
+            )}</ol>${tripCard(tripByChapter.get(u.ids.at(-1)), tripState)}</section>`,
       )
       .join("")}</div>`;
+}
+function tripCard(t, progress) {
+  const state = progress?.(t.chapter);
+  return `<a class="trip-card" href="${weekURL(t)}"><span><small>第 ${t.week} 周实战 · 已计入第 ${t.week * 7} 章</small><strong>${t.title}</strong><span>${t.stops.map((s) => s.place).join(" → ")}</span></span><b>${state?.complete ? "查看回顾" : state?.records.length ? "继续行程" : "进入行程"} →</b></a>`;
 }

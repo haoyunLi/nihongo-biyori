@@ -2364,3 +2364,20 @@ footer > div {
 .chapter-recall summary { cursor: pointer; }
 .chapter-recall p { margin: .4rem 0; }
 .chapter-recall[open] ~ .chapter-instruction, .stage:has(> .chapter-recall[open]) > :is(.counter-lesson,.source-note,.practice-sample,.vowel-demo) { display: none; }
+
+.trip-card { display:flex; align-items:center; justify-content:space-between; gap:1rem; margin-top:1rem; padding:1rem 1.2rem; border:1px solid var(--line); border-left:4px solid var(--sage); border-radius:5px; background:var(--paper); }
+.trip-card small,.trip-card strong,.trip-card > span > span { display:block; }
+.trip-card small,.trip-stops { color:var(--sage); font-size:.85rem; }
+.trip-card strong { font:600 1.35rem/1.6 var(--serif); }
+.trip-card > span > span { color:var(--muted); font-size:.9rem; }
+.trip-card > b { flex-shrink:0; color:var(--sage); font-size:.9rem; }
+.trip-card:hover,.trip-card:focus-visible { background:#eef1e8; }
+.trip-stops { display:flex; flex-wrap:wrap; gap:.35rem 1rem; margin:.75rem 0; }
+.trip-stops span { display:inline-flex; align-items:center; gap:.35rem; }
+.trip-stops b { display:inline-grid; place-items:center; width:1.5em; height:1.5em; border:1px solid currentColor; border-radius:50%; }
+.trip-stops [aria-current] { font-weight:700; color:var(--red-deep); }
+.trip-stops [aria-current] b { background:var(--red-deep); color:var(--paper); }
+.trip-setting { margin:.5rem 0 1rem; }
+.trip-optional { margin:1rem 0; }
+.trip-optional summary { color:var(--sage); }
+@media(max-width:480px){ .trip-card{flex-direction:column;align-items:flex-start;gap:.4rem} }

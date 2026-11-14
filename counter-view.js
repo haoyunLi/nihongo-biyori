@@ -5,7 +5,7 @@ import {
   replies,
   availableExample,
 } from "./counter-data.js";
-import { chapterOf } from "./chapter-path.js?v=15";
+import { chapterOf } from "./chapter-path.js?v=16";
 
 const keys = Object.keys(families);
 export const validCounter = (part) =>

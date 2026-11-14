@@ -1,27 +1,28 @@
 import { chapterTalks } from "./chapter-talk-data.js";
-import { createChapterBook } from "./chapter-talk-book.js";
-import { createTalk, validTalk, talkLink } from "./talk-view.js?v=15";
+import { createChapterBook } from "./chapter-talk-book.js?v=16";
+import { weeklyTrips, tripByChapter, weekURL } from "./weekly-trips.js";
+import { createTalk, validTalk, talkLink } from "./talk-view.js?v=16";
 import {
   chapterIds,
   chapterOf,
   dailyChapter,
   routeView,
-} from "./chapter-path.js?v=15";
+} from "./chapter-path.js?v=16";
 import {
   createCounter,
   counterLessonBlock,
   counterLessonLinks,
   validCounter,
 } from "./counter-view.js?v=13";
-import { questions } from "./question-bank.js?v=15";
+import { questions } from "./question-bank.js?v=16";
 import { sources } from "./screen-lessons.js";
 import { tripTasks } from "./travel-finish.js?v=13";
-import { localDay, scheduleMistake, updateBook } from "./recall.js?v=15";
+import { localDay, scheduleMistake, updateBook } from "./recall.js?v=16";
 import {
   activityTitles,
   createListening,
 } from "./listening-activities.js?v=10";
-import { createRecorder, recordingButton } from "./recording.js?v=15";
+import { createRecorder, recordingButton } from "./recording.js?v=16";
 import { contrastById } from "./contrast-data.js";
 import {
   contrastView,
@@ -29,9 +30,9 @@ import {
   handleContrast,
   stopContrast,
   leaveContrast,
-} from "./contrast-view.js?v=15";
-import { lessons, references } from "./lessons.js?v=15";
-import { createPractice } from "./practice.js?v=15";
+} from "./contrast-view.js?v=16";
+import { lessons, references } from "./lessons.js?v=16";
+import { createPractice } from "./practice.js?v=16";
 import { sceneById } from "./scenes.js";
 import { kanaRows, kanaNotes, extraKana } from "./kana.js";
 import { strokes } from "./strokes.js?v=3";
@@ -43,8 +44,8 @@ import {
   handleGuide,
   changeGuideRow,
   stopGuidePlayback,
-} from "./guide-view.js?v=15";
-import { speak, stopAudio } from "./audio.js?v=15";
+} from "./guide-view.js?v=16";
+import { speak, stopAudio } from "./audio.js?v=16";
 
 const tracks = [
   {
@@ -217,23 +218,64 @@ const chapterBook = createChapterBook(
   },
   localDay,
 );
+function dayBudget(l, reviewMinutes) {
+  const stages = [...l.stageMinutes];
+  // In a 15-minute lesson the extra review minute comes from the dialogue:
+  // listen to one exchange; the rest is still available as optional practice.
+  const compact = l.minutes === 15 && reviewMinutes > l.reviewMinutes;
+  if (compact) stages[l.steps.length] = 1;
+  return {
+    stages,
+    compact,
+    minutes: stages.reduce((sum, n) => sum + n, reviewMinutes),
+  };
+}
 function finishChapter(id) {
   const check = chapterBook.checkpoint(id);
-  if (check.quiz && check.talk && !state.done.includes(id)) {
+  const spoken = tripByChapter.has(id)
+    ? chapterBook.tripState(id).complete
+    : check.talk;
+  if (check.quiz && spoken && !state.done.includes(id)) {
     state.done.push(id);
     state.completionDays[id] = localDay();
     save();
   }
 }
+function tripSetup(trip) {
+  const id = trip.chapter,
+    l = lessonById.get(id);
+  const progress = () => chapterBook.tripState(id);
+  talk.enterAssignment({
+    trip,
+    progress,
+    items: progress().items,
+    label: "每周实战 · 第 " + trip.week + " 周",
+    help: (key, flag) => chapterBook.tripHelp(id, key, flag),
+    result: (r) => chapterBook.tripAnswer(id, r.id, r.flags),
+    complete: () => finishChapter(id),
+    restart: () => {
+      chapterBook.restartTrip(id);
+      go();
+    },
+    returnURL: lessonURL(id, l.steps.length + 2),
+    returnLabel: "回到第 " + chapterOf(id) + " 章",
+  });
+}
+const weekFor = (number) => weeklyTrips.find((t) => String(t.week) === number);
+const reviewTripFor = (id) => id?.startsWith("week-") && weekFor(id.slice(5));
+const afterReview = (id) =>
+  id === "today"
+    ? "#chapters"
+    : reviewTripFor(id)
+      ? weekURL(reviewTripFor(id))
+      : lessonURL(id);
 function chapterTalkSetup(id, review) {
   const l = lessonById.get(id),
     plan = chapterTalks.get(id);
   const items = review ? chapterBook.due() : chapterBook.remaining(id);
   if (!items.length) return false;
   const returnURL = review
-    ? id === "today"
-      ? "#chapters"
-      : lessonURL(id)
+    ? afterReview(id)
     : lessonURL(id, l.steps.length + 2);
   talk.enterAssignment({
     items,
@@ -247,10 +289,13 @@ function chapterTalkSetup(id, review) {
     returnLabel: review
       ? id === "today"
         ? "回每日章节"
-        : "继续今天的章节"
+        : reviewTripFor(id)
+          ? "继续这趟小旅行"
+          : "继续今天的章节"
       : "回到章节进度",
-    miss: (key) => {
-      if (!review) chapterBook.settle(key, ["unclear"], false);
+    help: (key, flag) => {
+      if (!review && flag === "unclear")
+        chapterBook.settle(key, ["unclear"], false);
     },
     result: (r, variant) => {
       if (review) chapterBook.settle(r.id, r.flags, true, variant);
@@ -645,11 +690,12 @@ function moraDemo() {
   );
 }
 function stageTitles(lesson) {
+  const trip = tripByChapter.get(lesson.id);
   return [
     ...lesson.steps.map((s) => s.title),
-    lesson.mission ? "旅行实战" : "情景对话",
+    trip ? "行前热身" : "情景对话",
     "随堂练习",
-    "用本章句子接话",
+    trip ? "本周开口小旅行" : "用本章句子接话",
   ];
 }
 function manageQuiz(l) {
@@ -722,7 +768,9 @@ function quizStage(l) {
       esc(l.title) +
       '</h2><div class="actions"><a class="btn primary" href="' +
       lessonURL(l.id, l.steps.length + 2) +
-      '">进入章末接话</a>' +
+      '">' +
+      (tripByChapter.has(l.id) ? "进入每周实战" : "进入章末接话") +
+      "</a>" +
       '<button class="tool" data-action="retry">重做练习</button></div></div>'
     );
   }
@@ -739,7 +787,9 @@ function quizStage(l) {
     (session.answer === q.answer
       ? '<div class="actions" style="margin-top:15px"><button class="btn primary" data-action="advance">' +
         (session.question === l.quiz.length - 1
-          ? "完成小测，进入接话"
+          ? tripByChapter.has(l.id)
+            ? "完成小测，出发去实战"
+            : "完成小测，进入接话"
           : "下一题") +
         " " +
         ic("arrow") +
@@ -799,15 +849,22 @@ function spokenModel(item) {
 function missionView() {
   const i = tripTasks.findIndex((_, i) => !state.missionChecked.includes(i));
   if (i < 0)
-    return '<div class="panel"><h2>五个旅行任务已练完</h2><p>接下来做两道小测，再用本章的句子聊三轮。也可以重新练这五个任务。</p><div class="actions"><a class="btn primary" href="#lesson/t09/4">进入结课练习</a><a class="tool" href="#practice/counter/mixed">换个店员，混合听六轮</a><button class="tool" data-action="mission-reset">重练旅行实战</button></div></div>';
+    return '<div class="panel"><h2>五个选做任务已练完</h2><div class="actions"><a class="btn primary" href="#lesson/t09/4">进入随堂练习</a><button class="tool" data-action="mission-reset">重练这五个任务</button></div></div>';
   const t = tripTasks[i],
     reveal = session.missionReveal === i;
   return `<div class="panel mission"><p class="small-label">旅行实战 · ${i + 1} / ${tripTasks.length} · ${t.place}</p><h2>轮到你开口</h2><p>${esc(t.prompt)}</p>${t.cue ? '<button class="tool" data-action="mission-listen" data-index="' + i + '">' + (session.missionHeard === i ? "再听对方说话" : "先听对方说话") + "</button>" : ""}
   ${reveal ? `<p>${t.tip}</p>${spokenModel(t.model)}${t.extra ? spokenModel(t.extra) : ""}<button class="btn primary" data-action="mission-check" data-index="${i}">已开口并核对，继续</button>` : '<button class="btn primary" data-action="mission-reveal" ' + (t.cue && session.missionHeard !== i ? "disabled" : "") + ">说完了，听参考说法</button>"}</div>`;
 }
 function readerStage(l) {
-  const n = stageIndex;
+  const n = stageIndex,
+    trip = tripByChapter.get(l.id);
   if (n === l.steps.length + 2) {
+    if (trip) {
+      const progress = chapterBook.tripState(l.id),
+        cp = chapterBook.checkpoint(l.id);
+      finishChapter(l.id);
+      return `<div class="panel"><p class="small-label">${progress.complete ? "✓ 已走完本周小旅行" : "每周实战 · 约 " + trip.minutes + " 分钟"}</p><h2>${esc(trip.title)}</h2><p>${esc(progress.complete ? trip.finish : trip.intro)}</p><div class="actions">${progress.complete && !cp.quiz && !state.done.includes(l.id) ? '<a class="btn primary" href="' + lessonURL(l.id, l.steps.length + 1) + '">做随堂练习，完成本章</a>' : progress.complete ? '<a class="btn primary" href="#chapters">回每日章节</a>' : ""}<a class="${progress.complete ? "tool" : "btn primary"}" href="${weekURL(trip)}">${progress.complete ? "看实战回顾" : "进入小旅行 · 剩 " + progress.items.length + " 轮"}</a></div></div>`;
+    }
     const plan = chapterTalks.get(l.id),
       cp = chapterBook.checkpoint(l.id),
       left = chapterBook.remaining(l.id);
@@ -819,13 +876,21 @@ function readerStage(l) {
       return `<div class="panel"><h2>本章接话已完成</h2><a class="btn primary" href="${lessonURL(l.id, l.steps.length + 1)}">做随堂练习，完成本章</a></div>`;
     return `<div class="panel"><p class="small-label">章末接话 · 约 3 分钟</p><h2>${esc(l.title)}</h2><p>${esc(plan.intro)}</p><a class="btn primary" href="${assignedURL(l.id)}">开始接话 · 剩 ${left.length} 轮</a></div>`;
   }
+  if (trip && n === l.steps.length) {
+    const sample = chapterTalks.get(l.id).turns[0].model;
+    return `<div class="panel"><p class="small-label">行前热身 · 1 分钟</p><h2>把今天的一句话说顺</h2><p>${esc(sample.zh)}　先自己说一次，再听示范。</p><details><summary>核对说法</summary>${spokenModel(sample)}</details><p>小测后，从「${esc(trip.stops[0].place)}」出发，走完第 ${trip.week} 周的小旅行。</p><a class="btn primary" href="${lessonURL(l.id, n + 1)}">进入随堂练习</a></div><details class="trip-optional"${l.mission && session.extraMission ? " open" : ""}><summary>选做 · ${l.mission ? "原有五个旅行任务" : "完整情景对话"}</summary>${l.mission ? missionView() : l.dialogue.map((item, d) => row(item, l.id + ".d" + d, true)).join("")}</details>`;
+  }
   if (
-    l.mission &&
-    (n === l.steps.length ||
-      (n === l.steps.length + 1 &&
-        state.missionChecked.length < tripTasks.length))
-  )
-    return missionView();
+    !trip &&
+    n === l.steps.length &&
+    dayBudget(l, chapterBook.reviewMinutes()).compact
+  ) {
+    const pair = l.dialogue.slice(0, 2);
+    return `<div class="panel"><p class="small-label">今日对话 · 1 分钟</p><h2>听一问一答</h2><p>今天多留了一分钟给开口复习。听这一组，然后进小测。</p>${pair.map((v, i) => row(v, l.id + ".d" + i, true)).join("")}<a class="btn primary" href="${lessonURL(l.id, n + 1)}">进入随堂练习</a></div><details class="trip-optional"><summary>选做 · 听余下的对话</summary>${l.dialogue
+      .slice(2)
+      .map((v, i) => row(v, l.id + ".d" + (i + 2), true))
+      .join("")}</details>`;
+  }
   if (n === l.steps.length + 1) {
     let extra = sceneById.has(l.id)
       ? '<a class="btn" href="#practice/scene/' +
@@ -948,7 +1013,9 @@ function readerStage(l) {
     (n === l.steps.length
       ? "进入练习"
       : n === l.steps.length - 1
-        ? "进入对话"
+        ? trip
+          ? "行前热身"
+          : "进入对话"
         : "下一步") +
     " " +
     ic("arrow") +
@@ -957,6 +1024,8 @@ function readerStage(l) {
 }
 function lessonView(l) {
   const t = tracks.find((t) => t.id === l.track);
+  const review = chapterBook.reviewMinutes(),
+    budget = dayBudget(l, review);
   return (
     '<div class="inner">' +
     crumb(t.name, "#courses/" + t.id, "课程") +
@@ -971,8 +1040,12 @@ function lessonView(l) {
     '</p><div class="meta"><span lang="ja">' +
     esc(l.jpTitle) +
     "</span><span>约 " +
-    l.minutes +
-    " 分钟（含开口复习 2 分钟、章末接话 3 分钟）</span>" +
+    budget.minutes +
+    " 分钟（含开口复习 " +
+    review +
+    " 分钟、" +
+    (tripByChapter.has(l.id) ? "本周小旅行 5 分钟）" : "章末接话 3 分钟）") +
+    "</span>" +
     (state.done.includes(l.id)
       ? '<span class="complete">' + ic("check") + " 已完成</span>"
       : "") +
@@ -989,7 +1062,7 @@ function lessonView(l) {
           "</span>" +
           esc(t) +
           " · " +
-          l.stageMinutes[i] +
+          budget.stages[i] +
           " 分钟</button>",
       )
       .join("") +
@@ -1405,23 +1478,27 @@ function go() {
   talk.enter(
     route === "practice" && arg === "talk" && validTalk(num) ? num : undefined,
   );
+  const trip = route === "practice" && arg === "week-trip" && weekFor(num);
   const assigned =
     route === "practice" &&
-    (arg === "chapter-talk" || arg === "chapter-review");
-  if (
-    assigned &&
-    (lessonById.has(num) || (arg === "chapter-review" && num === "today"))
-  ) {
+    Boolean(
+      trip ||
+      (arg === "chapter-talk" && lessonById.has(num)) ||
+      (arg === "chapter-review" &&
+        (num === "today" || lessonById.has(num) || reviewTripFor(num))),
+    );
+  if (trip) {
+    if (chapterBook.due().length) {
+      location.replace(assignedURL("week-" + trip.week, true));
+      return;
+    }
+    tripSetup(trip);
+  } else if (assigned) {
     if (!chapterTalkSetup(num, arg === "chapter-review")) {
       location.replace(
-        num === "today"
-          ? "#chapters"
-          : lessonURL(
-              num,
-              arg === "chapter-talk"
-                ? lessonById.get(num).steps.length + 2
-                : undefined,
-            ),
+        arg === "chapter-review"
+          ? afterReview(num)
+          : lessonURL(num, lessonById.get(num).steps.length + 2),
       );
       return;
     }
@@ -1438,9 +1515,7 @@ function go() {
     route === "practice" &&
     arg &&
     !(
-      (assigned &&
-        (lessonById.has(num) ||
-          (arg === "chapter-review" && num === "today"))) ||
+      assigned ||
       Object.hasOwn(activityTitles, arg) ||
       arg === "daily" ||
       (arg === "counter" && validCounter(num)) ||
@@ -1497,7 +1572,13 @@ function go() {
   const view = {
     home,
     chapters: () =>
-      routeView(lessonById, state, localDay(), chapterBook.due().length),
+      routeView(
+        lessonById,
+        state,
+        localDay(),
+        chapterBook.due().length,
+        chapterBook.tripState,
+      ),
     courses: courseView,
     kana: () => (arg ? guideView(arg, num, script, guideContext) : kanaView()),
     lesson: () => lessonView(currentLesson),
@@ -1540,9 +1621,11 @@ function go() {
           : "五十音图",
       review: "复习手帖",
       practice: assigned
-        ? arg === "chapter-review"
-          ? "今日开口复习"
-          : "章末接话"
+        ? trip
+          ? trip.title + " · 每周实战"
+          : arg === "chapter-review"
+            ? "今日开口复习"
+            : "章末接话"
         : arg === "talk"
           ? "开口对话"
           : arg === "counter"
@@ -1647,6 +1730,7 @@ main.addEventListener("click", (e) => {
   if (!button) return;
   const { action, key } = button.dataset;
   if (action === "mission-listen") {
+    session.extraMission = true;
     const i = Number(button.dataset.index),
       t = tripTasks[i];
     if (!t?.cue) return;
@@ -1783,9 +1867,12 @@ main.addEventListener("click", (e) => {
         finishChapter(currentLesson.id);
         state.positions[currentLesson.id] = currentLesson.steps.length + 2;
         save();
-        location.hash = chapterBook.remaining(currentLesson.id).length
-          ? assignedURL(currentLesson.id)
-          : lessonURL(currentLesson.id, currentLesson.steps.length + 2);
+        const trip = tripByChapter.get(currentLesson.id);
+        location.hash = trip
+          ? weekURL(trip)
+          : chapterBook.remaining(currentLesson.id).length
+            ? assignedURL(currentLesson.id)
+            : lessonURL(currentLesson.id, currentLesson.steps.length + 2);
       } else session.question++;
       session.answer = null;
       rerenderStage();
@@ -1795,12 +1882,14 @@ main.addEventListener("click", (e) => {
       rerenderStage();
       break;
     case "mission-reveal":
+      session.extraMission = true;
       session.missionReveal = tripTasks.findIndex(
         (_, i) => !state.missionChecked.includes(i),
       );
       rerenderStage();
       break;
     case "mission-reset":
+      session.extraMission = true;
       state.missionChecked = [];
       session.missionReveal = null;
       session.missionHeard = null;
@@ -1886,7 +1975,13 @@ function refreshChapterDay() {
     main.innerHTML =
       route === "home"
         ? home()
-        : routeView(lessonById, state, day, chapterBook.due().length);
+        : routeView(
+            lessonById,
+            state,
+            day,
+            chapterBook.due().length,
+            chapterBook.tripState,
+          );
   if (route === "lesson" && currentLesson && chapterBook.due().length)
     location.replace(assignedURL(currentLesson.id, true));
 }

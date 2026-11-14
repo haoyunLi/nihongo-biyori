@@ -1,3 +1,4 @@
+import {tripByChapter} from "./weekly-trips.js";
 import {extensionLessons} from "./daily-extension.js";
 import {addCounterChecks} from "./counter-data.js";
 import {addBridges} from "./chapter-bridges.js";
@@ -1682,7 +1683,9 @@ lessons.push(
   },
 );
 
-lessons.push(...screenLessons,...travelFinish,...extensionLessons);
+// Alternate module URLs can coexist across releases. Keep the exported lesson
+// templates immutable when adding the course's shared transition questions.
+lessons.push(...structuredClone([...screenLessons, ...travelFinish, ...extensionLessons]));
 addBridges(lessons);
 addCounterChecks(lessons);
 
@@ -1691,6 +1694,7 @@ addCounterChecks(lessons);
 for (const lesson of lessons) {
   lesson.reviewMinutes=2;
   lesson.stageMinutes=lesson.steps.map((_,i)=>lesson.steps.length===4 ? (i<2?2:1) : lesson.steps.length===2?2:(i===0?2:1));
-  lesson.stageMinutes.push(lesson.mission?4:2,2,3);
+  const trip = tripByChapter.get(lesson.id);
+  lesson.stageMinutes.push(trip ? 1 : 2, 2, trip?.minutes || 3);
   lesson.minutes=lesson.reviewMinutes+lesson.stageMinutes.reduce((sum,n)=>sum+n,0);
 }
