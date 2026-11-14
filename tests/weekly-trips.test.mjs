@@ -57,6 +57,8 @@ test("all five weekly misses take precedence together next day, share daily keys
   const book = createChapterBook(storage, () => day),
     id = "t04",
     { turns } = weeklyTrips[1];
+  // Resume a pre-encounter itinerary saved by the previous release.
+  book.patch("week:" + id, { answers: {} });
   book.markTurn("f01.0", ["skip"]);
   day++;
   book.markTurn(turns[0].id, ["skip"]);

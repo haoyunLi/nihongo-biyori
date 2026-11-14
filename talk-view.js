@@ -1,4 +1,4 @@
-import { chapterTurns, chapterAnswer } from "./chapter-talk-data.js";
+import { assignedEntry, assignedAnswer } from "./trip-encounters.js";
 import { tripByChapter } from "./weekly-trips.js";
 import { talks } from "./talk-data.js?v=13";
 import {
@@ -88,21 +88,38 @@ export function createTalk(ctx) {
     heard = false,
     lastTurn = null,
     memoryNote = "";
-  const entry = () => chapterTurns.get(run?.node);
+  const entry = () => assignedEntry(run?.node);
   function getNode() {
     if (!assignment) return talks[scene].nodes[run.node];
     const t = entry();
+    const target =
+      assignment.review && t.choices
+        ? t.answers[run.items[run.index].choice]
+        : null;
     return {
       title: t.goal,
       prompt:
         run.items[run.index].cue ||
         (run.items[run.index].variant ? t.alternate : t.first),
-      hint: "先想想「" + t.model.zh + "」怎么说。需要时展开示范。",
-      edges: [{ model: t.model, next: null }],
+      hint:
+        t.choices && !target
+          ? "你可以自己选：" +
+            t.answers.map((a) => a.model.zh).join(" / ") +
+            "。用你想走的那种说法回答。"
+          : "先想想「" + (target || t).model.zh + "」怎么说。需要时展开示范。",
+      edges: (t.answers || [t])
+        .map((a, choice) => ({ model: a.model, choice, next: null }))
+        .filter((e) => !target || e.choice === run.items[run.index].choice),
     };
   }
   const understand = (raw) =>
-    assignment ? chapterAnswer(entry(), raw) : interpret(scene, run.node, raw);
+    assignment
+      ? assignedAnswer(
+          entry(),
+          raw,
+          assignment.review ? run.items[run.index].choice : undefined,
+        )
+      : interpret(scene, run.node, raw);
   const partner = () => talks[assignment ? entry().scene : scene];
   const partnerRole = () => (assignment ? entry().role : partner().role);
 
@@ -139,7 +156,7 @@ export function createTalk(ctx) {
     leave();
     assignment = config;
     scene = config.items.length
-      ? chapterTurns.get(config.items[0].id).scene
+      ? assignedEntry(config.items[0].id).scene
       : null;
     preferredAuto = false;
   }
@@ -294,8 +311,27 @@ export function createTalk(ctx) {
       model = result.model || node.edges[0].model.jp;
     lastTurn = { text, skipped, model };
     const variant = run.items?.[run.index]?.variant;
-    const record = finishTurn(run, result, { text, model, attempt });
-    if (assignment) assignment.result(record, variant);
+    const record = finishTurn(run, result, {
+      text,
+      model,
+      attempt,
+      skipped,
+      choice: result.choice,
+    });
+    if (assignment) {
+      assignment.result(record, variant);
+      if (assignment.trip) {
+        const progress = assignment.progress();
+        assignment.trip = progress.trip;
+        run.items.splice(
+          run.index,
+          run.items.length - run.index,
+          ...progress.items,
+        );
+        run.node = run.items[run.index]?.id ?? null;
+        run.done = run.node === null;
+      }
+    }
     clearTurn();
     clip = [...result.replies];
     if (run.done) {
@@ -441,7 +477,10 @@ export function createTalk(ctx) {
     const trip =
       assignment?.trip || (assignment?.review && tripByChapter.get(item?.trip));
     const stop =
-      trip && trip.stops[trip.turns.find((t) => t.id === item.id).stop];
+      trip &&
+      trip.stops[
+        entry().stop ?? trip.turns.find((t) => t.id === item.id)?.stop
+      ];
     const idx = assignment?.trip
       ? "第 " +
         assignment.trip.week +
@@ -455,7 +494,7 @@ export function createTalk(ctx) {
         : run.items
           ? `重练 ${run.index + 1} / ${run.items.length}`
           : `对话 · 第 ${run.index + 1} 轮`;
-    return `<h1>${ctx.esc(trip ? trip.title : partner().title)}</h1>${assignment?.trip ? itinerary(trip, item.stop) : ""}<section class="panel talk-round"><p class="small-label">${idx} · ${partnerRole()}</p><h2>${stop ? ctx.esc(stop.place) : "听完，用日语接话"}</h2>${stop ? '<p class="trip-setting">' + ctx.esc(stop.setting) + "</p>" : assignment ? '<p class="talk-goal">' + ctx.esc(entry().goal) + "</p>" : ""}${lastTurn?.skipped && !run.items ? `<p class="talk-last">这句先跳过，情景按「${ctx.esc(lastTurn.model)}」继续。</p>` : lastTurn?.text && !run.items ? `<p class="talk-last">你刚才说　<span lang="ja">${ctx.esc(lastTurn.text)}</span></p>` : ""}
+    return `<h1>${ctx.esc(trip ? trip.title : partner().title)}</h1>${assignment?.trip ? itinerary(trip, item.stop) : ""}<section class="panel talk-round"><p class="small-label">${idx} · ${partnerRole()}</p><h2>${stop ? ctx.esc(stop.place) : "听完，用日语接话"}</h2>${stop ? '<p class="trip-setting">' + ctx.esc(assignment?.review && entry().choices?.[item.choice] ? "这次的任务：" + entry().choices[item.choice].ending + "。听对方换一种问法，再把这个决定告诉对方。" : entry().setting || stop.setting) + "</p>" : assignment ? '<p class="talk-goal">' + ctx.esc(entry().goal) + "</p>" : ""}${lastTurn?.skipped && !run.items ? `<p class="talk-last">这句先跳过，情景按「${ctx.esc(lastTurn.model)}」继续。</p>` : lastTurn?.text && !run.items ? `<p class="talk-last">你刚才说　<span lang="ja">${ctx.esc(lastTurn.text)}</span></p>` : ""}
    <div class="actions">${button("listen", phase === "playing" ? "重新播放" : heard ? "再听问题" : "听对方说", false, b)}${button("line", "看原句和中文", false, (!continuous && b) || showLine)}</div>${promptLine}
    <div class="talk-response"><div class="actions">${voiceButtons}</div>
    <p class="reading" role="status" aria-live="polite">${ctx.esc(status || notice || (!voiceAvailable() ? "当前环境无法开麦，可以直接输入日语。" : "也可以切到连续对话，说完停一下就能接着聊。"))}</p>
@@ -492,12 +531,12 @@ export function createTalk(ctx) {
         { records, complete } = a.progress();
       const missed = records.filter((r) => r.flags.length);
       const body = complete
-        ? `<h1>本周小旅行完成</h1>${itinerary(t)}<section class="panel"><p class="small-label">第 ${t.week} 周 · ${ctx.esc(t.title)}</p><h2>${records.length - missed.length} / ${records.length} 轮独立接上</h2><p>${ctx.esc(t.finish)}</p>${
+        ? `<h1>本周小旅行完成</h1>${itinerary(t)}<section class="panel"><p class="small-label">第 ${t.week} 周 · ${ctx.esc(t.title)}</p><h2>${records.length - missed.length} / ${records.length} 轮独立接上</h2><p>${ctx.esc(t.finish)}</p>${t.outcome ? '<p class="trip-outcome"><b>' + (records.some((r) => r.skipped) ? "跳过选择后，行程按此继续：" : "你的选择：") + "</b>" + ctx.esc(t.outcome) + "。</p>" : ""}${
             missed.length
               ? '<h3>下次换个问法</h3><ul class="talk-misses">' +
                 missed
                   .map((r) => {
-                    const item = chapterTurns.get(r.id),
+                    const item = assignedEntry(r.id),
                       step = t.turns.find((v) => v.id === r.id);
                     return (
                       "<li><b>" +
@@ -507,17 +546,17 @@ export function createTalk(ctx) {
                       '<p lang="ja">' +
                       ctx.esc(step.cue.jp) +
                       '</p><p>一种接法：<span lang="ja">' +
-                      ctx.esc(item.model.jp) +
+                      ctx.esc((item.answers?.[r.choice] || item).model.jp) +
                       "</span> · " +
-                      ctx.esc(item.model.zh) +
+                      ctx.esc((item.answers?.[r.choice] || item).model.zh) +
                       "</p></li>"
                     );
                   })
                   .join("") +
                 "</ul><p>下个学习日优先换问法练这些句子，和章末复习合计最多五句。</p>"
               : "<p>每一站你都自己接上了。</p>"
-          }<div class="actions"><a class="btn primary" href="${a.returnURL}">${a.returnLabel}</a>${button("trip-restart", "重走这趟旅行")}</div></section>`
-        : `<h1>${ctx.esc(t.title)}</h1><p class="lead">${ctx.esc(t.intro)}</p>${itinerary(t)}<section class="practice-feature"><p class="small-label">第 ${t.week} 周 · 开口实战</p><h2>${records.length ? "从上次停下的一站继续" : "先听，自己接话"}</h2><p>${records.length ? "已走完 " + records.length + " 轮，还有 " + a.items.length + " 轮。" : t.stops.length + " 站，" + t.turns.length + " 轮，约 " + t.minutes + " 分钟。"}听完日语，用这一周学过的话回应。卡住再点提示。</p><div class="actions">${voiceAvailable() ? button("auto", "开启连续对话", true) : ""}${button("start", "逐句练习或输入日语", !voiceAvailable())}</div></section>`;
+          }<div class="actions"><a class="btn primary" href="${a.returnURL}">${a.returnLabel}</a>${button("trip-restart", "换个情况再走（选做）")}</div></section>`
+        : `<h1>${ctx.esc(t.title)}</h1><p class="lead">${ctx.esc(t.intro)}</p>${itinerary(t)}<section class="practice-feature"><p class="small-label">第 ${t.week} 周 · 开口实战${t.encounter ? " · " + ctx.esc(t.encounter) : ""}</p><h2>${records.length ? "从上次停下的一站继续" : "先听，自己接话"}</h2><p>${records.length ? "已走完 " + records.length + " 轮，还有 " + a.items.length + " 轮。" : t.stops.length + " 站，" + t.turns.length + " 轮，约 " + t.minutes + " 分钟。"}听完日语，用这一周学过的话回应。遇到选择时，直接说你的决定，对方会顺着你的回答问下去。卡住再点提示。</p><div class="actions">${voiceAvailable() ? button("auto", "开启连续对话", true) : ""}${button("start", "逐句练习或输入日语", !voiceAvailable())}</div></section>`;
       return '<div class="inner narrow talk-page">' + back + body + "</div>";
     }
     const misses = run?.records.filter((r) => r.flags.length) || [];
@@ -526,8 +565,8 @@ export function createTalk(ctx) {
           misses.length
             ? `<h3>下个学习日换问法</h3><ul>${misses
                 .map((r) => {
-                  const t = chapterTurns.get(r.id);
-                  return `<li>${ctx.esc(t.goal)}<p lang="ja">${ctx.esc(t.model.jp)}</p></li>`;
+                  const t = assignedEntry(r.id);
+                  return `<li>${ctx.esc(t.goal)}<p lang="ja">${ctx.esc((t.answers?.[r.choice] || t).model.jp)}</p></li>`;
                 })
                 .join("")}</ul>`
             : ""
@@ -634,7 +673,12 @@ export function createTalk(ctx) {
           (e) => !e.question && !["order", "takeCheck"].includes(e.next),
         ) || n.edges[0];
       advance(
-        { next: e.next, replies: [], model: e.model.jp },
+        {
+          next: e.next,
+          replies: [],
+          model: e.model.jp,
+          choice: entry()?.choices ? e.choice : undefined,
+        },
         { text: attempt, skipped: true },
       );
       return;

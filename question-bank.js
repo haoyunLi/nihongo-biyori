@@ -1,3 +1,4 @@
+import {encounterSpeech} from "./trip-encounters.js";
 import {weeklyTrips} from "./weekly-trips.js";
 import {chapterSpeech} from "./chapter-talk-data.js";
 import { talkSpeech } from "./talk-data.js?v=13";
@@ -9,7 +10,7 @@ import {
   guided,
   families,
 } from "./counter-data.js";
-import { lessons } from "./lessons.js?v=16";
+import { lessons } from "./lessons.js?v=17";
 import { station, animeScenes } from "./activity-data.js";
 import { contrasts } from "./contrast-data.js";
 import { scenes } from "./scenes.js";
@@ -107,6 +108,7 @@ const spoken = {
 };
 export const additionalSpeech = [
   ...weeklyTrips.flatMap(t => t.turns.map(v => v.cue)),
+  ...encounterSpeech,
   ...chapterSpeech,
   ...talkSpeech,
   ...counterSpeech,

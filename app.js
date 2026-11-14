@@ -1,28 +1,28 @@
 import { chapterTalks } from "./chapter-talk-data.js";
-import { createChapterBook } from "./chapter-talk-book.js?v=16";
+import { createChapterBook } from "./chapter-talk-book.js?v=17";
 import { weeklyTrips, tripByChapter, weekURL } from "./weekly-trips.js";
-import { createTalk, validTalk, talkLink } from "./talk-view.js?v=16";
+import { createTalk, validTalk, talkLink } from "./talk-view.js?v=17";
 import {
   chapterIds,
   chapterOf,
   dailyChapter,
   routeView,
-} from "./chapter-path.js?v=16";
+} from "./chapter-path.js?v=17";
 import {
   createCounter,
   counterLessonBlock,
   counterLessonLinks,
   validCounter,
 } from "./counter-view.js?v=13";
-import { questions } from "./question-bank.js?v=16";
+import { questions } from "./question-bank.js?v=17";
 import { sources } from "./screen-lessons.js";
 import { tripTasks } from "./travel-finish.js?v=13";
-import { localDay, scheduleMistake, updateBook } from "./recall.js?v=16";
+import { localDay, scheduleMistake, updateBook } from "./recall.js?v=17";
 import {
   activityTitles,
   createListening,
 } from "./listening-activities.js?v=10";
-import { createRecorder, recordingButton } from "./recording.js?v=16";
+import { createRecorder, recordingButton } from "./recording.js?v=17";
 import { contrastById } from "./contrast-data.js";
 import {
   contrastView,
@@ -30,9 +30,9 @@ import {
   handleContrast,
   stopContrast,
   leaveContrast,
-} from "./contrast-view.js?v=16";
-import { lessons, references } from "./lessons.js?v=16";
-import { createPractice } from "./practice.js?v=16";
+} from "./contrast-view.js?v=17";
+import { lessons, references } from "./lessons.js?v=17";
+import { createPractice } from "./practice.js?v=17";
 import { sceneById } from "./scenes.js";
 import { kanaRows, kanaNotes, extraKana } from "./kana.js";
 import { strokes } from "./strokes.js?v=3";
@@ -44,8 +44,8 @@ import {
   handleGuide,
   changeGuideRow,
   stopGuidePlayback,
-} from "./guide-view.js?v=16";
-import { speak, stopAudio } from "./audio.js?v=16";
+} from "./guide-view.js?v=17";
+import { speak, stopAudio } from "./audio.js?v=17";
 
 const tracks = [
   {
@@ -246,12 +246,13 @@ function tripSetup(trip) {
     l = lessonById.get(id);
   const progress = () => chapterBook.tripState(id);
   talk.enterAssignment({
-    trip,
+    trip: progress().trip,
     progress,
     items: progress().items,
     label: "每周实战 · 第 " + trip.week + " 周",
     help: (key, flag) => chapterBook.tripHelp(id, key, flag),
-    result: (r) => chapterBook.tripAnswer(id, r.id, r.flags),
+    result: (r) =>
+      chapterBook.tripAnswer(id, r.id, r.flags, r.choice, r.skipped),
     complete: () => finishChapter(id),
     restart: () => {
       chapterBook.restartTrip(id);
@@ -298,7 +299,8 @@ function chapterTalkSetup(id, review) {
         chapterBook.settle(key, ["unclear"], false);
     },
     result: (r, variant) => {
-      if (review) chapterBook.settle(r.id, r.flags, true, variant);
+      if (review)
+        chapterBook.settle(r.id, r.flags, true, variant, undefined, r.choice);
       else chapterBook.markTurn(r.id, r.flags);
     },
     complete: () => {
@@ -863,7 +865,7 @@ function readerStage(l) {
       const progress = chapterBook.tripState(l.id),
         cp = chapterBook.checkpoint(l.id);
       finishChapter(l.id);
-      return `<div class="panel"><p class="small-label">${progress.complete ? "✓ 已走完本周小旅行" : "每周实战 · 约 " + trip.minutes + " 分钟"}</p><h2>${esc(trip.title)}</h2><p>${esc(progress.complete ? trip.finish : trip.intro)}</p><div class="actions">${progress.complete && !cp.quiz && !state.done.includes(l.id) ? '<a class="btn primary" href="' + lessonURL(l.id, l.steps.length + 1) + '">做随堂练习，完成本章</a>' : progress.complete ? '<a class="btn primary" href="#chapters">回每日章节</a>' : ""}<a class="${progress.complete ? "tool" : "btn primary"}" href="${weekURL(trip)}">${progress.complete ? "看实战回顾" : "进入小旅行 · 剩 " + progress.items.length + " 轮"}</a></div></div>`;
+      return `<div class="panel"><p class="small-label">${progress.complete ? "✓ 已走完本周小旅行" : "每周实战 · 约 " + trip.minutes + " 分钟"}</p><h2>${esc(trip.title)}</h2><p>${esc(progress.complete ? progress.trip.finish : progress.trip.intro)}</p><div class="actions">${progress.complete && !cp.quiz && !state.done.includes(l.id) ? '<a class="btn primary" href="' + lessonURL(l.id, l.steps.length + 1) + '">做随堂练习，完成本章</a>' : progress.complete ? '<a class="btn primary" href="#chapters">回每日章节</a>' : ""}<a class="${progress.complete ? "tool" : "btn primary"}" href="${weekURL(trip)}">${progress.complete ? "看实战回顾" : "进入小旅行 · 剩 " + progress.items.length + " 轮"}</a></div></div>`;
     }
     const plan = chapterTalks.get(l.id),
       cp = chapterBook.checkpoint(l.id),

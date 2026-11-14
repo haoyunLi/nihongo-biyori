@@ -2,6 +2,12 @@
 // missed turns can be saved independently across tabs.
 import { chapterTalks, chapterTurns } from "./chapter-talk-data.js";
 import { tripByChapter } from "./weekly-trips.js";
+import {
+  encounterEntries,
+  tripAttempt,
+  assignedEntry,
+} from "./trip-encounters.js";
+const retryKeys = [...chapterTurns.keys(), ...encounterEntries.keys()];
 const prefix = "nihongo-biyori-chapter-talk-v1:";
 export function createChapterBook(storage, readDay) {
   const memory = new Map();
@@ -30,7 +36,7 @@ export function createChapterBook(storage, readDay) {
     write("lesson:" + id, { ...checkpoint(id), ...data });
   }
   function due(day = readDay()) {
-    const entries = [...chapterTurns.keys()].map((key) => ({
+    const entries = retryKeys.map((key) => ({
       key,
       record: read("retry:" + key),
     }));
@@ -61,16 +67,19 @@ export function createChapterBook(storage, readDay) {
       .map((e) => ({
         id: e.key,
         variant: e.record.variant || 0,
+        ...(assignedEntry(e.key)?.choices && Number.isInteger(e.record.choice)
+          ? { choice: e.record.choice }
+          : {}),
         ...(e.record.trip ? { trip: e.record.trip } : {}),
       }));
   }
   function reviewMinutes(day = readDay()) {
-    const done = [...chapterTurns.keys()].filter(
+    const done = retryKeys.filter(
       (k) => read("retry:" + k)?.reviewed === day,
     ).length;
     return done + due(day).length > 3 ? 3 : 2;
   }
-  function settle(id, flags, review, variant = 0, trip) {
+  function settle(id, flags, review, variant = 0, trip, choice) {
     const day = readDay(),
       missed = flags.length > 0,
       key = "retry:" + id,
@@ -85,11 +94,13 @@ export function createChapterBook(storage, readDay) {
         due: missed ? day + 1 : null,
         reviewed: day,
         variant: 1 - variant,
+        choice: choice ?? old.choice,
       });
     } else if (missed) {
       write(key, {
         ...old,
         trip: trip || (Number.isInteger(old.due) ? old.trip : undefined),
+        choice: choice ?? (Number.isInteger(old.due) ? old.choice : undefined),
         due: Number.isInteger(old.due) ? Math.min(old.due, day + 1) : day + 1,
         variant: old.due == null ? 1 : old.variant,
       });
@@ -115,45 +126,83 @@ export function createChapterBook(storage, readDay) {
   // Trips reuse the same phrase/retry key as the source lesson, but completing
   // a trip must never mark the source chapter's own conversation as finished.
   function tripState(id) {
-    const trip = tripByChapter.get(id),
-      data = checkpoint("week:" + id);
+    const data = checkpoint("week:" + id);
+    // Old visits keep their original questions and completion until replayed.
+    const old =
+      Object.hasOwn(data, "answers") || Object.hasOwn(data, "pending");
+    const edition = data.edition ?? (old ? null : 0);
+    const trip = tripAttempt(tripByChapter.get(id), edition, data.choices);
     const records = [],
       items = [];
     for (const t of trip.turns) {
       const flags = data.answers?.[t.id];
-      if (Array.isArray(flags)) records.push({ id: t.id, flags });
+      if (Array.isArray(flags))
+        records.push({
+          id: t.id,
+          flags,
+          ...(Number.isInteger(data.choices?.[t.id])
+            ? { choice: data.choices[t.id], skipped: !!data.skipped?.[t.id] }
+            : {}),
+        });
       else items.push({ ...t, variant: 0 });
     }
     return {
       records,
       items,
+      trip,
+      edition,
       complete: !items.length,
     };
   }
   function tripHelp(id, key, flag) {
     const slot = "week:" + id,
       data = checkpoint(slot);
-    settle(key, [flag], false, 0, id);
     if (data.answers?.[key]) return;
+    const { edition } = tripState(id);
+    settle(key, [flag], false, 0, id);
     patch(slot, {
+      edition,
       pending: {
         ...data.pending,
         [key]: [...new Set([...(data.pending?.[key] || []), flag])],
       },
     });
   }
-  function tripAnswer(id, key, flags) {
+  function tripAnswer(id, key, flags, choice, skipped = false) {
     const slot = "week:" + id,
       data = checkpoint(slot);
+    if (!encounterEntries.get(key)?.choices) choice = undefined;
+    const { edition } = tripState(id);
     const used = [...new Set([...(data.pending?.[key] || []), ...flags])];
     // Assistance was queued at the moment it was used, even if the learner
     // finished this turn on a later date after independently clearing its retry.
     if (flags.some((f) => !data.pending?.[key]?.includes(f)))
-      settle(key, flags, false, 0, id);
-    patch(slot, { answers: { ...data.answers, [key]: used } });
+      settle(key, flags, false, 0, id, choice);
+    if (Number.isInteger(choice) && used.length) {
+      const retry = read("retry:" + key);
+      if (Number.isInteger(retry?.due))
+        write("retry:" + key, { ...retry, choice });
+    }
+    patch(slot, {
+      edition,
+      answers: { ...data.answers, [key]: used },
+      ...(Number.isInteger(choice)
+        ? {
+            choices: { ...data.choices, [key]: choice },
+            skipped: { ...data.skipped, [key]: skipped },
+          }
+        : {}),
+    });
   }
   function restartTrip(id) {
-    patch("week:" + id, { answers: {}, pending: {} });
+    const current = tripState(id).edition;
+    patch("week:" + id, {
+      edition: current == null ? 0 : (current + 1) % 2,
+      answers: {},
+      pending: {},
+      choices: {},
+      skipped: {},
+    });
   }
   return {
     checkpoint,

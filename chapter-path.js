@@ -57,7 +57,7 @@ export function routeView(ctx, state, day, due = 0, tripState) {
     : today.length
       ? "今日目标已完成"
       : "今日一章";
-  return `<div class="inner narrow chapter-route"><h1>每日章节</h1><p class="lead">每天约 10–15 分钟，已算入开口复习。平日用当天的句子聊 2–3 轮，每逢第 7 章，换成一趟串起本周场景的小旅行。<a class="text-link" href="#courses">按主题找课</a></p>
+  return `<div class="inner narrow chapter-route"><h1>每日章节</h1><p class="lead">每天约 10–15 分钟，已算入开口复习。平日用当天的句子聊 2–3 轮，每逢第 7 章，换成一趟小旅行。直接用日语做选择，对方会接着问；重走会遇到另一种情况。<a class="text-link" href="#courses">按主题找课</a></p>
     <section class="chapter-today"><span class="small-label">${lead}</span><h2>${today.length ? today.map((id) => ordinal(id)).join("、") + " 已完成" : complete ? "把学过的日语用起来" : ordinal(next) + " · " + nextLesson.title}</h2>
     <p>${complete || today.length ? "今天的章内任务已完成。" : nextLesson.goal}</p><div class="actions">${due ? `<a class="btn primary" href="#practice/chapter-review/${next || "today"}">先复习上次的 ${due} 句</a>` : today.length || complete ? '<a class="tool" href="#practice/daily">额外练习（选做）</a>' : link(next, state.positions[next] ? "继续本章" : "开始本章")}${today.length && next ? link(next, "提前学下一章", "tool") : ""}<a class="tool" href="#review/mistakes">打开错题本</a></div></section>
     ${units
